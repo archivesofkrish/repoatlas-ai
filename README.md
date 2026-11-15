@@ -27,7 +27,7 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Hybrid retrieval | Expands lexical matches through resolved import relationships, with explicit graph provenance and bounded depth |
 | Evidence packs | Returns file path, line range, commit SHA, excerpt, match reason, and explicit retrieval limitations |
 | Credential hygiene | Excludes common sensitive filenames and redacts several common token patterns in returned excerpts |
-| Interfaces | CLI and optional FastAPI service with scan, search, ask, graph, and impact endpoints |
+| Interfaces | CLI and optional FastAPI service with scan, lexical/hybrid search, ask, graph, and impact endpoints |
 
 The multi-language parser is an optional capability. Install and cache grammars explicitly; repository scans do not download parser code or execute project code.
 
@@ -158,11 +158,11 @@ flowchart TD
     G --> H[Dependency and call graph]
     G --> I[Lexical retrieval index]
     H --> J[Impact analysis]
-    H --> K[Graph-aware retrieval]
-    I --> K
-    J --> L[Evidence pack]
+    H --> K[Graph-aware expansion]
+    I --> L[Hybrid ranking]
     K --> L
-    K --> L[File, line, and revision citations]
+    L --> M[Evidence pack]
+    M --> N[File, line, and revision citations]
 ```
 
 ### Source layout
@@ -171,7 +171,7 @@ flowchart TD
 src/repoatlas/
 ├── analyzer.py   # Snapshot scan, Python AST, multi-language integration
 ├── api.py        # FastAPI routes and root confinement
-├── cli.py        # scan, search, ask, graph, impact
+├── cli.py        # scan, search, hybrid-search, ask, graph, impact
 ├── graph.py      # Dependency graph and transitive impact analysis
 ├── hybrid.py     # Bounded lexical + dependency-graph retrieval
 ├── models.py     # Typed repository and analysis models
@@ -204,7 +204,7 @@ See [SECURITY.md](SECURITY.md) for reporting guidance and [CONTRIBUTING.md](CONT
 ## Testing and quality
 
 ```bash
-ruff check src tests
+ruff check src tests benchmarks
 pytest --cov=repoatlas --cov-report=term-missing --cov-fail-under=80
 python benchmarks/evaluate_retrieval.py --top-k 5
 ```
@@ -221,7 +221,7 @@ The tests use temporary repositories and synthetic source fixtures; no personal 
 |---|---|---|
 | 1 | Safe scanner, Python AST, lexical evidence packs, CLI, local API, tests, CI | Implemented |
 | 2 | Tree-sitter multi-language parsing, import/call graph, transitive impact | Implemented |
-| 3 | Hybrid retrieval, graph-aware ranking, benchmark corpus, retrieval evaluation | Implemented in current release branch |
+| 3 | Hybrid retrieval, graph-aware ranking, benchmark corpus, retrieval evaluation | Implemented |
 | 4 | Optional model-provider abstraction with claim-to-citation validation | Planned |
 | 5 | Interactive architecture explorer and investigation dashboard | Planned |
 | 6 | Incremental indexing, secure workspaces, and CI/IDE integrations | Planned |

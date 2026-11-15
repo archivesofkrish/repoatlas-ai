@@ -1,4 +1,4 @@
-"""Signup orchestration entry point."""
+"""Workflow orchestration entry point."""
 
 from api.account_routes import submit
 

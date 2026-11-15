@@ -52,6 +52,7 @@ def test_hybrid_search_expands_transitive_import_context_with_citations(tmp_path
     assert "src/services/workflow.py" in by_path
     assert "Graph-expanded evidence" in by_path["src/services/workflow.py"].reason
     assert "distance 2" in by_path["src/services/workflow.py"].reason
+    assert "src/api/routes.py" in by_path["src/services/workflow.py"].reason
     hit = by_path["src/services/workflow.py"]
     assert validate_citation(tmp_path, {
         "path": hit.path, "start_line": hit.start_line, "end_line": hit.end_line,

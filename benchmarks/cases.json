@@ -4,7 +4,7 @@
   "cases": [
     {
       "id": "password-registration-flow",
-      "query": "password history enforcement account registration",
+      "query": "password history enforcement",
       "relevant": [
         "src/security/password_policy.py",
         "src/api/account_routes.py",

@@ -131,10 +131,10 @@ def hybrid_search_repository(
 
     for seed in seeds:
         seed_strength = seed.score / maximum_lexical_score
-        queue = deque([(seed.path, 0, seed_strength)])
+        queue = deque([(seed.path, 0, seed_strength, [])])
         best_for_seed = {seed.path: seed_strength}
         while queue:
-            current, depth, strength = queue.popleft()
+            current, depth, strength, chain = queue.popleft()
             if depth >= graph_depth:
                 continue
             for neighbour, relation, via in adjacency.get(current, []):
@@ -143,14 +143,18 @@ def hybrid_search_repository(
                 if propagated <= best_for_seed.get(neighbour, 0.0):
                     continue
                 best_for_seed[neighbour] = propagated
+                next_chain = [
+                    *chain,
+                    f"{current} -[{relation}]-> {neighbour} (import at {via})",
+                ]
                 detail = (
-                    f"related to lexical match {seed.path} via {relation} "
-                    f"(distance {next_depth}; import evidence {via})"
+                    f"related to lexical match {seed.path} by import path "
+                    f"(distance {next_depth}; {'; '.join(next_chain)})"
                 )
                 previous = graph_signals.get(neighbour)
                 if previous is None or propagated > previous[0]:
                     graph_signals[neighbour] = (propagated, detail)
-                queue.append((neighbour, next_depth, propagated))
+                queue.append((neighbour, next_depth, propagated, next_chain))
                 if len(graph_signals) >= _MAX_GRAPH_CANDIDATES:
                     break
             if len(graph_signals) >= _MAX_GRAPH_CANDIDATES:
