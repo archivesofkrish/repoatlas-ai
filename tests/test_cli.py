@@ -71,6 +71,27 @@ def test_cli_architecture_writes_self_contained_explorer(tmp_path: Path, capsys)
     assert "Architecture explorer written to:" in capsys.readouterr().out
 
 
+
+def test_cli_guardrails_json_and_html_modes(tmp_path: Path, capsys):
+    import json
+
+    (tmp_path / "api").mkdir()
+    (tmp_path / "database").mkdir()
+    (tmp_path / "api" / "routes.py").write_text("import database.session\n", encoding="utf-8")
+    (tmp_path / "database" / "session.py").write_text("VALUE = 1\n", encoding="utf-8")
+    policy = tmp_path / "policy.json"
+    policy.write_text(json.dumps({"schema_version": 1, "allowed_package_dependencies": {"api": []}}), encoding="utf-8")
+    assert main(["guard", str(tmp_path), "--policy", str(policy), "--json"]) == 1
+    assert '"status": "FAIL"' in capsys.readouterr().out
+
+    passing = tmp_path / "pass.json"
+    passing.write_text(json.dumps({"schema_version": 1, "fail_on_cycles": True}), encoding="utf-8")
+    output = tmp_path / "artifacts" / "guardrails.html"
+    assert main(["guard", str(tmp_path), "--policy", str(passing), "--output", str(output)]) == 0
+    assert "Architecture guardrails" in output.read_text(encoding="utf-8")
+    assert "Status: PASS" in capsys.readouterr().out
+
+
 def test_cli_architecture_json_mode(tmp_path: Path, capsys):
     (tmp_path / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -20,10 +21,11 @@ from repoatlas.llm import ProviderError, generate_grounded_answer
 from repoatlas.api_validation import resolve_workspace_path
 from repoatlas.architecture import build_architecture_report
 from repoatlas.review import review_changes
+from repoatlas.guardrails import evaluate_architecture_policy
 
 app = FastAPI(
     title="RepoAtlas AI",
-    version="0.7.0",
+    version="0.9.0",
     description=(
         "Read-only repository intelligence with evidence retrieval "
         "and architecture analysis"
@@ -59,6 +61,10 @@ class ImpactRequest(RepositoryRequest):
 class ReviewRequest(RepositoryRequest):
     base_ref: str = Field(default="main", min_length=1, max_length=128)
     max_depth: int = Field(default=5, ge=1, le=20)
+
+
+class ArchitectureGuardrailsRequest(RepositoryRequest):
+    policy: dict[str, Any]
 
 
 def resolve_project_path(raw: str) -> Path:
@@ -201,6 +207,17 @@ def review_endpoint(payload: ReviewRequest) -> dict:
             base_ref=payload.base_ref,
             max_depth=payload.max_depth,
         )
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/architecture/guardrails")
+def architecture_guardrails_endpoint(payload: ArchitectureGuardrailsRequest) -> dict:
+    """Evaluate static package dependencies against a supplied declarative policy."""
+    try:
+        report = analyze_repository(resolve_project_path(payload.path))
+        architecture_report = build_architecture_report(report, build_graph(report))
+        return evaluate_architecture_policy(architecture_report, payload.policy)
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

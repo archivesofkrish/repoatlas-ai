@@ -15,6 +15,11 @@ from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
 from repoatlas.architecture import build_architecture_report, render_architecture_html
 from repoatlas.review import review_changes, render_change_review_html
+from repoatlas.guardrails import (
+    evaluate_architecture_policy,
+    load_architecture_policy,
+    render_architecture_guardrails_html,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=180,
         help="Maximum modules rendered in the HTML graph (20–500)",
     )
+    guard = sub.add_parser("guard", help="Evaluate package dependencies against architecture policy")
+    guard.add_argument("path", type=Path)
+    guard.add_argument("--policy", type=Path, required=True, help="JSON architecture policy file")
+    guard.add_argument("--json", action="store_true", help="Print machine-readable policy results")
+    guard.add_argument("--output", type=Path, help="HTML report path (default: PATH/repoatlas-guardrails.html)")
     impact = sub.add_parser("impact", help="Find files affected by changing a target file")
     impact.add_argument("path", type=Path)
     impact.add_argument("target")
@@ -156,6 +166,22 @@ def main(argv: list[str] | None = None) -> int:
                     f"Cycles: {stats['dependency_cycles']}"
                 )
             return 0
+        if args.command == "guard":
+            if args.json and args.output is not None:
+                raise ValueError("--output cannot be combined with --json")
+            analysis = analyze_repository(args.path)
+            architecture_report = build_architecture_report(analysis, build_graph(analysis))
+            policy = load_architecture_policy(args.policy)
+            result = evaluate_architecture_policy(architecture_report, policy)
+            if args.json:
+                print(json.dumps(result, indent=2))
+            else:
+                destination = args.output or (args.path / "repoatlas-guardrails.html")
+                written = render_architecture_guardrails_html(result, destination)
+                summary = result["summary"]
+                print(f"Architecture policy report written to: {written}")
+                print(f"Status: {result['status']} | Rules: {summary['rules_checked']} | Violations: {summary['violations']}")
+            return 0 if result["status"] == "PASS" else 1
         if args.command == "impact":
             graph_data = build_graph(analyze_repository(args.path))
             result = impact_analysis(graph_data, args.target, max_depth=args.max_depth)

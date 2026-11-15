@@ -62,6 +62,10 @@ When changing graph resolution or architecture metrics, add tests for:
 Treat dependency cycles, fan-in and structural scores as review heuristics. Do not label them as defects, runtime reachability or maintainability scores without separate evidence.
 
 
+## Architecture guardrails
+
+Architecture-policy tests cover valid and invalid schemas, allowed and forbidden package relationships, cross-package import caps, cycle rules, representative file-level evidence and HTML escaping. Policies are declarative JSON and must not trigger source execution. A PASS means the observed static graph did not violate configured rules; it is not proof of runtime architectural correctness.
+
 ## Change review workbench
 
 Change-review tests use temporary Git repositories and cover tracked modifications, untracked additions, deletions, transitive import dependants, invalid refs, repository-root boundaries and script-safe offline HTML output. Attention tiers are count-based triage only. The working-tree graph and deleted-file limitations must remain explicit when extending this feature.

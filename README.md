@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.8.0` — content-addressed source snapshots, multi-language static analysis, file- and package-level dependency topology, change-impact review, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, and a bounded local API.
+**Current release:** `0.9.0` — adds configurable architecture guardrails with CLI, API and standalone HTML reporting to content-addressed source analysis, package topology, change-impact review, evidence retrieval and grounded answers.
 
 ## Why RepoAtlas?
 
@@ -27,6 +27,7 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Change review workbench | Compares a Git base reference with the working tree, traces dependants, and renders an interactive offline impact dashboard |
 | Architecture intelligence | Detects statically resolved dependency cycles, package boundaries, isolated files and high fan-in/fan-out modules; quantifies cross-package coupling and cycle concentration |
 | Interactive architecture observatory | Switches between a module dependency map and a package topology map, with contextual package metrics and module inspection in self-contained offline HTML |
+| Architecture guardrails | Evaluates allowed/forbidden package dependencies, cross-package import caps and cycle policy; emits evidence-backed JSON or offline HTML findings |
 | Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
 | Hybrid retrieval | Expands lexical matches through resolved import relationships, with explicit graph provenance and bounded depth |
 | Evidence packs | Returns file path, line range, commit SHA, content hash, snapshot fingerprint, excerpt, match reason, and explicit retrieval limitations |
@@ -70,6 +71,7 @@ repoatlas answer /path/to/repository "How does authentication work?"
 repoatlas graph /path/to/repository
 repoatlas impact /path/to/repository src/core/auth.py
 repoatlas review /path/to/repository --base-ref main
+repoatlas guard /path/to/repository --policy ./architecture-policy.json
 ```
 
 The core scanner and Python AST analyser use the Python standard library. Tree-sitter grammars are downloaded only by the explicit command above (or an equivalent operator-managed setup step).
@@ -167,6 +169,37 @@ repoatlas architecture PATH --json
 
 The report includes file-level fan-in/fan-out, structural hotspots, top-level package boundaries, isolated files and strongly connected components (static import cycles). The HTML explorer is self-contained and works offline: search paths, filter by language or package, select a module to inspect its dependencies/dependants, and pan or zoom the graph. The visual map prioritises the most structurally connected modules when a repository is large; the JSON/API report retains all scanned file metrics. A cycle or high structural score is a review signal, not proof of a defect or a maintainability score.
 
+
+### Architecture guardrails
+
+Create a JSON policy describing package boundaries and coupling limits:
+
+```json
+{
+  "schema_version": 1,
+  "name": "Layered application",
+  "allowed_package_dependencies": {
+    "api": ["application", "domain"],
+    "application": ["domain", "shared"],
+    "domain": ["shared"]
+  },
+  "forbidden_package_dependencies": [
+    {"source": "api", "target": "infrastructure", "reason": "Use application services instead."}
+  ],
+  "max_cross_package_imports": {"api": 40},
+  "fail_on_cycles": true
+}
+```
+
+Run the policy and produce machine-readable findings or a styled offline report:
+
+```bash
+repoatlas guard PATH --policy ./architecture-policy.json --json
+repoatlas guard PATH --policy ./architecture-policy.json --output ./artifacts/guardrails.html
+```
+
+Findings include package relationships and up to five representative source-to-target file imports. PASS means no configured rule was violated by the observed static graph; it does not prove runtime architectural correctness. Policy files are JSON data, not executable configuration.
+
 ## Optional HTTP API
 
 Install the API extra and start the service with an explicit workspace root:
@@ -187,6 +220,7 @@ REPOATLAS_ROOT=/path/to/workspace uvicorn repoatlas.api:app --host 127.0.0.1 --p
 | `POST /v1/graph` | Build dependency and call-reference graph |
 | `POST /v1/impact` | Estimate likely file impact |
 | `POST /v1/architecture` | Return package boundaries, dependency cycles, isolated files and structural hotspots |
+| `POST /v1/architecture/guardrails` | Evaluate supplied architecture rules against the repository's static package graph |
 
 Example graph request:
 

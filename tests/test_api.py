@@ -146,6 +146,33 @@ def test_architecture_api_returns_dependency_insights(tmp_path: Path, monkeypatc
     assert body["hubs"][0]["path"] in {"core.py", "api.py"}
 
 
+
+def test_architecture_guardrails_api_evaluates_supplied_policy(tmp_path: Path, monkeypatch):
+    (tmp_path / "api").mkdir()
+    (tmp_path / "database").mkdir()
+    (tmp_path / "api" / "routes.py").write_text("import database.session\n", encoding="utf-8")
+    (tmp_path / "database" / "session.py").write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+    response = TestClient(api.app).post(
+        "/v1/architecture/guardrails",
+        json={"path": ".", "policy": {
+            "schema_version": 1, "allowed_package_dependencies": {"api": []}
+        }},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "FAIL"
+    assert response.json()["violations"][0]["source"] == "api"
+
+
+def test_architecture_guardrails_api_rejects_invalid_policy(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+    response = TestClient(api.app).post(
+        "/v1/architecture/guardrails",
+        json={"path": ".", "policy": {"schema_version": 2}},
+    )
+    assert response.status_code == 422
+
+
 def test_change_review_api_reports_working_tree_impact(tmp_path: Path, monkeypatch):
     import subprocess
 
