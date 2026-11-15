@@ -1,8 +1,9 @@
 """Dependency and call-reference graph construction and impact analysis."""
+
 from __future__ import annotations
 
-from collections import defaultdict, deque
 import posixpath
+from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 
 from repoatlas.models import AnalysisReport
@@ -34,7 +35,10 @@ def _resolve_module(module: str, files: set[str], source_path: str) -> str | Non
     for candidate in candidates:
         if candidate in files:
             return candidate
-    matches = [path for path in files if path.rsplit("/", 1)[-1].split(".")[0] == cleaned]
+    matches = [
+        path for path in files
+        if path.rsplit("/", 1)[-1].split(".")[0] == cleaned
+    ]
     return sorted(matches)[0] if len(matches) == 1 else None
 
 
@@ -52,14 +56,20 @@ def build_graph(report: AnalysisReport) -> dict:
     for path, imports in report.imports.items():
         for item in imports:
             if isinstance(item, dict):
-                target, line = str(item.get("target", "")), int(item.get("line", 1))
+                target = str(item.get("target", ""))
+                line = int(item.get("line", 1))
             else:
                 target, line = str(item), 1
             resolved = _resolve_module(target, file_paths, path)
             edges.append(GraphEdge(
-                source=path, target=resolved or target, kind="imports",
-                path=path, line=line, resolved=resolved is not None,
+                source=path,
+                target=resolved or target,
+                kind="imports",
+                path=path,
+                line=line,
+                resolved=resolved is not None,
             ))
+
     for path, calls in report.calls.items():
         for call in calls:
             target = str(call.get("target", ""))
@@ -68,10 +78,14 @@ def build_graph(report: AnalysisReport) -> dict:
             candidates = symbols_by_name.get(target, [])
             resolved_target = candidates[0] if len(candidates) == 1 else None
             edges.append(GraphEdge(
-                source=source, target=resolved_target or target, kind="calls",
-                path=path, line=int(call.get("line", 1)),
+                source=source,
+                target=resolved_target or target,
+                kind="calls",
+                path=path,
+                line=int(call.get("line", 1)),
                 resolved=resolved_target is not None,
             ))
+
     for edge in edges:
         nodes.add(edge.source)
         nodes.add(edge.target)
