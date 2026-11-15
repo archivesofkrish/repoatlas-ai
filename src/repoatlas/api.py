@@ -17,7 +17,7 @@ from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
-from repoatlas.api_validation import bounded_integer, bounded_weight, resolve_workspace_path
+from repoatlas.api_validation import resolve_workspace_path
 
 app = FastAPI(
     title="RepoAtlas AI",
