@@ -80,7 +80,10 @@ def test_cli_guardrails_json_and_html_modes(tmp_path: Path, capsys):
     (tmp_path / "api" / "routes.py").write_text("import database.session\n", encoding="utf-8")
     (tmp_path / "database" / "session.py").write_text("VALUE = 1\n", encoding="utf-8")
     policy = tmp_path / "policy.json"
-    policy.write_text(json.dumps({"schema_version": 1, "allowed_package_dependencies": {"api": []}}), encoding="utf-8")
+    policy.write_text(
+        json.dumps({"schema_version": 1, "allowed_package_dependencies": {"api": []}}),
+        encoding="utf-8",
+    )
     assert main(["guard", str(tmp_path), "--policy", str(policy), "--json"]) == 1
     assert '"status": "FAIL"' in capsys.readouterr().out
 

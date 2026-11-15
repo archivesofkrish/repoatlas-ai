@@ -65,11 +65,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=180,
         help="Maximum modules rendered in the HTML graph (20–500)",
     )
-    guard = sub.add_parser("guard", help="Evaluate package dependencies against architecture policy")
+    guard = sub.add_parser(
+        "guard", help="Evaluate package dependencies against architecture policy"
+    )
     guard.add_argument("path", type=Path)
-    guard.add_argument("--policy", type=Path, required=True, help="JSON architecture policy file")
-    guard.add_argument("--json", action="store_true", help="Print machine-readable policy results")
-    guard.add_argument("--output", type=Path, help="HTML report path (default: PATH/repoatlas-guardrails.html)")
+    guard.add_argument(
+        "--policy", type=Path, required=True, help="JSON architecture policy file"
+    )
+    guard.add_argument(
+        "--json", action="store_true", help="Print machine-readable policy results"
+    )
+    guard.add_argument(
+        "--output",
+        type=Path,
+        help="HTML report path (default: PATH/repoatlas-guardrails.html)",
+    )
     impact = sub.add_parser("impact", help="Find files affected by changing a target file")
     impact.add_argument("path", type=Path)
     impact.add_argument("target")
@@ -180,7 +190,10 @@ def main(argv: list[str] | None = None) -> int:
                 written = render_architecture_guardrails_html(result, destination)
                 summary = result["summary"]
                 print(f"Architecture policy report written to: {written}")
-                print(f"Status: {result['status']} | Rules: {summary['rules_checked']} | Violations: {summary['violations']}")
+                print(
+                    f"Status: {result['status']} | Rules: {summary['rules_checked']} | "
+                    f"Violations: {summary['violations']}"
+                )
             return 0 if result["status"] == "PASS" else 1
         if args.command == "impact":
             graph_data = build_graph(analyze_repository(args.path))
