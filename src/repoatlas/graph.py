@@ -23,8 +23,19 @@ def _resolve_module(module: str, files: set[str], source_path: str) -> str | Non
     cleaned = module.strip().strip("'").strip('"').replace("\\", "/")
     if not cleaned or cleaned.startswith(("http://", "https://")):
         return None
-    if cleaned.startswith("."):
+    if cleaned.startswith(("./", "../")):
+        # JavaScript/TypeScript relative paths are filesystem-like specifiers.
         base = posixpath.normpath(posixpath.join(posixpath.dirname(source_path), cleaned))
+    elif cleaned.startswith("."):
+        # Python relative imports use leading dots as package traversal levels.
+        level = len(cleaned) - len(cleaned.lstrip("."))
+        remainder = cleaned[level:]
+        package_dir = posixpath.dirname(source_path)
+        for _ in range(max(level - 1, 0)):
+            package_dir = posixpath.dirname(package_dir)
+        base = posixpath.normpath(
+            posixpath.join(package_dir, remainder.replace(".", "/"))
+        )
     else:
         base = cleaned.replace(".", "/").lstrip("/")
     candidates = [
