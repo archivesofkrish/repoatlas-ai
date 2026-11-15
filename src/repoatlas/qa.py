@@ -31,8 +31,10 @@ def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
         ),
         "evidence": evidence,
         "limitations": [
-            "Retrieval is lexical in this release; semantic retrieval and runtime tracing are not implemented.",
-            "Python symbol extraction uses static AST parsing and does not infer dynamic behaviour.",
+            "Retrieval is lexical in this release; semantic retrieval and runtime tracing "
+            "are not implemented.",
+            "Python symbol extraction uses static AST parsing and does not infer "
+            "dynamic behaviour.",
             "Secret detection uses heuristics and cannot guarantee complete credential removal.",
         ],
     }
@@ -57,4 +59,8 @@ def validate_citation(root: str | Path, citation: dict) -> bool:
     except (OSError, UnicodeDecodeError):
         return False
     start, end = citation.get("start_line"), citation.get("end_line")
-    return isinstance(start, int) and isinstance(end, int) and 1 <= start <= end <= max(line_count, 1)
+    return (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and 1 <= start <= end <= max(line_count, 1)
+    )
