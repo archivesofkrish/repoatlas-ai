@@ -51,7 +51,7 @@ def evaluate_retrieval(
     if not 1 <= top_k <= 20:
         raise ValueError("top_k must be between 1 and 20")
     cases = json.loads(cases_path.read_text(encoding="utf-8"))
-    if cases.get("dataset_version") != "1.0" or not cases.get("cases"):
+    if cases.get("dataset_version") != "1.1" or not cases.get("cases"):
         raise ValueError("Unsupported or empty benchmark dataset")
 
     modes = {
@@ -87,6 +87,7 @@ def evaluate_retrieval(
         "dataset": cases["dataset_version"],
         "top_k": top_k,
         "description": cases.get("description", ""),
+        "case_definitions": cases["cases"],
         "metrics": per_mode,
         "interpretation": (
             "Metrics are measured on a small synthetic benchmark and are intended for "
