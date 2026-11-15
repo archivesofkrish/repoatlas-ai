@@ -124,14 +124,15 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
         return {"symbols": [], "imports": [], "calls": [], "warning": None}
 
     try:
-        from tree_sitter_language_pack import downloaded_languages, get_parser
+        from tree_sitter import Parser
+        from tree_sitter_language_pack import downloaded_languages, get_language
     except ImportError:
         return {
             "symbols": [], "imports": [], "calls": [],
             "warning": "Install the 'parsing' extra to enable Tree-sitter analysis.",
         }
-    # Check the local cache first. get_parser may download grammars on demand, which
-    # must never happen during repository ingestion.
+    # Check the local cache first. get_language can fetch missing grammars, so it
+    # must only be called when the exact grammar is already present on disk.
     if grammar not in set(downloaded_languages()):
         return {
             "symbols": [], "imports": [], "calls": [],
@@ -142,17 +143,23 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
         }
 
     source_bytes = source.encode("utf-8")
+    if len(source_bytes) > 1_000_000:
+        return {
+            "symbols": [], "imports": [], "calls": [],
+            "warning": f"Tree-sitter source limit exceeded for {path}.",
+        }
     try:
-        parser = get_parser(grammar)
-        if hasattr(parser, "set_max_source_bytes"):
-            parser.set_max_source_bytes(1_000_000)
-        if hasattr(parser, "set_parse_timeout_ms"):
-            parser.set_parse_timeout_ms(250)
-        tree = parser.parse(source)
+        # get_language() returns a standard tree_sitter.Language. Constructing
+        # tree_sitter.Parser directly ensures nodes expose the standard Python API
+        # (.type, .named_children, .start_point) used by this adapter.
+        parser = Parser(get_language(grammar))
+        if hasattr(parser, "timeout_micros"):
+            parser.timeout_micros = 250_000
+        tree = parser.parse(source_bytes)
     except Exception as exc:
         return {
             "symbols": [], "imports": [], "calls": [],
-            "warning": f"Tree-sitter could not parse {path}: {type(exc).__name__}.",
+            "warning": f"Tree-sitter could not parse {path}: {type(exc).__name__}: {exc}",
         }
     root = tree.root_node
     symbols: list[Symbol] = []
