@@ -60,8 +60,10 @@ def test_api_answer_uses_configured_provider_and_returns_cited_claims(tmp_path: 
                 "open_questions": [],
             }
 
+    from repoatlas import llm
+
     monkeypatch.setattr(
-        api.OpenAIResponsesProvider,
+        llm.OpenAIResponsesProvider,
         "from_env",
         classmethod(lambda cls: FakeProvider()),
     )
@@ -81,8 +83,10 @@ def test_api_answer_requires_explicit_provider_configuration(tmp_path: Path, mon
         encoding="utf-8",
     )
     monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+    from repoatlas import llm
+
     monkeypatch.setattr(
-        api.OpenAIResponsesProvider,
+        llm.OpenAIResponsesProvider,
         "from_env",
         classmethod(lambda cls: None),
     )
@@ -91,3 +95,26 @@ def test_api_answer_requires_explicit_provider_configuration(tmp_path: Path, mon
         json={"path": ".", "question": "How are authentication tokens checked?"},
     )
     assert response.status_code == 503
+
+
+
+def test_api_answer_skips_provider_when_no_evidence_exists(tmp_path: Path, monkeypatch):
+    from repoatlas import llm
+
+    (tmp_path / "auth.py").write_text(
+        "def authenticate_token(token):\n    return token is not None\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+    monkeypatch.setattr(
+        llm.OpenAIResponsesProvider,
+        "from_env",
+        classmethod(lambda cls: None),
+    )
+
+    response = TestClient(api.app).post(
+        "/v1/answer",
+        json={"path": ".", "question": "quantum nebula telescope"},
+    )
+    assert response.status_code == 200
+    assert response.json()["generation_status"] == "no_evidence"
