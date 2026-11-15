@@ -79,7 +79,9 @@ def build_graph(report: AnalysisReport) -> dict:
         nodes.add(node_id)
 
     edges: list[GraphEdge] = []
-    for path, imports in report.imports.items():
+    import_sources = dict(report.imports)
+    import_sources.update(report.import_details)
+    for path, imports in import_sources.items():
         for item in imports:
             if isinstance(item, dict):
                 target = str(item.get("target", ""))

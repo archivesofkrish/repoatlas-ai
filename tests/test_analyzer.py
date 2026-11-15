@@ -19,6 +19,8 @@ def test_extracts_nested_python_symbols_and_imports(tmp_path: Path):
     names = {symbol.qualified_name for symbol in report.symbols}
     assert {"Service", "Service.run", "Service.run.inner"} <= names
     assert report.imports["module.py"] == ["json", "pathlib"]
+    assert report.import_details["module.py"][1]["names"] == ["Path"]
+    assert report.import_details["module.py"][1]["line"] == 2
 
 
 def test_syntax_error_is_warning_not_crash(tmp_path: Path):
