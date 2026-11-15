@@ -118,3 +118,19 @@ def test_api_answer_skips_provider_when_no_evidence_exists(tmp_path: Path, monke
     )
     assert response.status_code == 200
     assert response.json()["generation_status"] == "no_evidence"
+
+
+def test_hybrid_search_rejects_non_finite_lexical_weight(tmp_path: Path, monkeypatch):
+    (tmp_path / "core.py").write_text(
+        "def authenticate(token):\\n    return bool(token)\\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+    client = TestClient(api.app)
+
+    response = client.post(
+        "/v1/hybrid-search",
+        content='{"path":".","query":"authenticate","lexical_weight":NaN}',
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
