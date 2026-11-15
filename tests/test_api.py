@@ -129,7 +129,7 @@ def test_hybrid_search_rejects_non_finite_lexical_weight(tmp_path: Path, monkeyp
 
     response = client.post(
         "/v1/hybrid-search",
-        content='{"path":".","query":"authenticate","lexical_weight":NaN}',
+        content=b'{"path":".","query":"authenticate","lexical_weight":NaN}',
         headers={"content-type": "application/json"},
     )
 
