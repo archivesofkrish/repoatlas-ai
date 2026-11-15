@@ -160,7 +160,12 @@ def test_grounded_answer_returns_insufficient_evidence_without_claims(tmp_path: 
 def test_grounded_answer_validates_inputs(tmp_path: Path, question: str, top_k: int):
     _project(tmp_path)
     with pytest.raises(ValueError):
-        generate_grounded_answer(tmp_path, question, provider=FakeProvider(_valid_result()), top_k=top_k)
+        generate_grounded_answer(
+            tmp_path,
+            question,
+            provider=FakeProvider(_valid_result()),
+            top_k=top_k,
+        )
 
 
 def test_provider_from_env_is_disabled_without_api_key(monkeypatch):

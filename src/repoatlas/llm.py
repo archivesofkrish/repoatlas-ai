@@ -232,7 +232,9 @@ def generate_grounded_answer(
             or any(not isinstance(value, str) for value in evidence_ids)
             or len(set(evidence_ids)) != len(evidence_ids)
         ):
-            raise ProviderError("Every claim must contain text and one to five unique evidence IDs.")
+            raise ProviderError(
+                "Every claim must contain text and one to five unique evidence IDs."
+            )
 
         citations = []
         for evidence_id in evidence_ids:
