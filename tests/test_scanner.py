@@ -3,6 +3,7 @@ from pathlib import Path
 from repoatlas.scanner import scan_files
 
 
+
 def test_scanner_indexes_text_and_excludes_sensitive_and_generated(tmp_path: Path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
