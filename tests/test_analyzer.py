@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from repoatlas.analyzer import analyze_repository
+from repoatlas.analyzer import analyze_repository, analyze_snapshot
+from repoatlas.scanner import create_snapshot
 
 
 def test_extracts_nested_python_symbols_and_imports(tmp_path: Path):
@@ -28,3 +29,17 @@ def test_syntax_error_is_warning_not_crash(tmp_path: Path):
     report = analyze_repository(tmp_path)
     assert report.symbols == []
     assert any("SyntaxError" in warning for warning in report.warnings)
+
+
+def test_analyzer_uses_captured_source_after_disk_file_changes(tmp_path: Path):
+    source = tmp_path / "module.py"
+    source.write_text("def captured_symbol():\n    return 1\n", encoding="utf-8")
+    snapshot = create_snapshot(tmp_path)
+
+    source.write_text("def later_symbol():\n    return 2\n", encoding="utf-8")
+    report = analyze_snapshot(snapshot)
+
+    names = {symbol.name for symbol in report.symbols}
+    assert "captured_symbol" in names
+    assert "later_symbol" not in names
+    assert report.snapshot_id == snapshot.snapshot_id

@@ -11,7 +11,13 @@ import hashlib
 import os
 from pathlib import Path
 
-from repoatlas.models import RepositoryFile, normalized_relative_path
+from repoatlas.models import (
+    RepositoryFile,
+    RepositorySnapshot,
+    SourceDocument,
+    normalized_relative_path,
+)
+from repoatlas.git import get_revision
 
 DEFAULT_IGNORES = {
     ".git", ".hg", ".svn", ".venv", "venv", "__pycache__", "node_modules",
@@ -64,14 +70,15 @@ def _safe_text(path: Path, max_file_bytes: int) -> tuple[bytes, str] | None:
         return None
 
 
-def scan_files(
+def _scan_files(
     root: str | Path,
     *,
     max_files: int = 20_000,
     max_file_bytes: int = 1_000_000,
     max_total_bytes: int = 100_000_000,
     extra_ignores: set[str] | None = None,
-) -> tuple[list[RepositoryFile], dict[str, int], list[str]]:
+    retain_content: bool,
+) -> tuple[list[RepositoryFile], list[SourceDocument], dict[str, int], list[str]]:
     """Discover bounded text files without following symlinks."""
     base = Path(root).expanduser().resolve(strict=True)
     if not base.is_dir():
@@ -81,6 +88,7 @@ def scan_files(
 
     ignores = DEFAULT_IGNORES | (extra_ignores or set())
     files: list[RepositoryFile] = []
+    documents: list[SourceDocument] = []
     excluded = {"ignored": 0, "sensitive": 0, "binary_or_unreadable": 0,
                 "oversized": 0, "unsupported": 0, "symlink": 0}
     warnings: list[str] = []
@@ -136,18 +144,82 @@ def scan_files(
                     "Total byte limit reached; remaining files were not scanned "
                     f"(at {rel})."
                 )
-                return files, excluded, warnings
+                return files, documents, excluded, warnings
             result = _safe_text(path, max_file_bytes)
             if result is None:
                 excluded["binary_or_unreadable"] += 1
                 continue
             data, text = result
-            files.append(RepositoryFile(
+            metadata = RepositoryFile(
                 path=rel, language=language, size_bytes=len(data),
                 line_count=len(text.splitlines()), sha256=hashlib.sha256(data).hexdigest(),
-            ))
+            )
+            files.append(metadata)
+            if retain_content:
+                documents.append(SourceDocument(metadata=metadata, content=text))
             total_bytes += len(data)
             if len(files) >= max_files:
                 warnings.append(f"File-count limit ({max_files}) reached; scan is partial.")
-                return files, excluded, warnings
+                return files, documents, excluded, warnings
+    return files, documents, excluded, warnings
+
+
+
+def create_snapshot(
+    root: str | Path,
+    *,
+    max_files: int = 20_000,
+    max_file_bytes: int = 1_000_000,
+    max_total_bytes: int = 100_000_000,
+    extra_ignores: set[str] | None = None,
+) -> RepositorySnapshot:
+    """Capture bounded source text once for consistent analysis and retrieval."""
+    base = Path(root).expanduser().resolve(strict=True)
+    revision_before = get_revision(base)
+    files, documents, excluded, warnings = _scan_files(
+        base,
+        max_files=max_files,
+        max_file_bytes=max_file_bytes,
+        max_total_bytes=max_total_bytes,
+        extra_ignores=extra_ignores,
+        retain_content=True,
+    )
+    revision_after = get_revision(base)
+    revision = revision_before if revision_before == revision_after else None
+    if revision_before != revision_after:
+        warnings.append("Git HEAD changed during scan; revision is not stable for this snapshot.")
+
+    fingerprint = hashlib.sha256()
+    for item in files:
+        fingerprint.update(item.path.encode("utf-8"))
+        fingerprint.update(b"\0")
+        fingerprint.update(item.sha256.encode("ascii"))
+        fingerprint.update(b"\n")
+    return RepositorySnapshot(
+        root=str(base),
+        snapshot_id=fingerprint.hexdigest(),
+        revision=revision,
+        documents=tuple(documents),
+        excluded=tuple(sorted(excluded.items())),
+        warnings=tuple(warnings),
+    )
+
+
+def scan_files(
+    root: str | Path,
+    *,
+    max_files: int = 20_000,
+    max_file_bytes: int = 1_000_000,
+    max_total_bytes: int = 100_000_000,
+    extra_ignores: set[str] | None = None,
+) -> tuple[list[RepositoryFile], dict[str, int], list[str]]:
+    """Return file metadata only, preserving the original scanner API."""
+    files, _documents, excluded, warnings = _scan_files(
+        root,
+        max_files=max_files,
+        max_file_bytes=max_file_bytes,
+        max_total_bytes=max_total_bytes,
+        extra_ignores=extra_ignores,
+        retain_content=False,
+    )
     return files, excluded, warnings

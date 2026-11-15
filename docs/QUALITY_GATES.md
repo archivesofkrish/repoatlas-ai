@@ -17,6 +17,8 @@ The CI matrix is the source of truth for compatibility claims. A local run on on
 ## Security and resource boundaries
 
 - The scanner uses bounded file count and byte limits and excludes symlinks, common generated directories, common credential stores, and sensitive filenames.
+- Full analysis and retrieval operations capture one in-memory repository snapshot, bounded by the configured total-byte limit. Parsing, ranking, and graph expansion consume this shared capture rather than re-reading source files.
+- Snapshot identifiers are content-addressed from relative paths and file SHA-256 hashes. Citations include the relevant file hash, and validation rejects a citation if the file has changed since retrieval.
 - Tree-sitter parsing only runs when the requested grammar is already cached.
 - Tree-sitter files are capped at 1 MB; parsing has a time limit, and syntax traversal has node-count and depth limits.
 - Python modules from the scanned repository are never imported or executed.

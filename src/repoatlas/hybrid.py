@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from pathlib import Path
 
-from repoatlas.analyzer import analyze_repository
+from repoatlas.analyzer import analyze_snapshot
 from repoatlas.graph import build_graph
-from repoatlas.models import SearchHit
-from repoatlas.search import _tokens_with_identifiers, search_repository
+from repoatlas.models import RepositorySnapshot, SearchHit, SourceDocument, Symbol
+from repoatlas.scanner import create_snapshot
+from repoatlas.search import _tokens_with_identifiers, search_snapshot
 
 _GRAPH_DECAY = 0.72
 _MAX_GRAPH_SEEDS = 20
@@ -16,28 +17,21 @@ _MAX_GRAPH_CANDIDATES = 500
 
 
 def _context_hit(
-    base: Path,
-    path: str,
+    document: SourceDocument,
+    snapshot: RepositorySnapshot,
     query_terms: set[str],
-    symbols_by_path: dict[str, list],
+    symbols_by_path: dict[str, list[Symbol]],
     context_lines: int,
     score: float,
     reason: str,
 ) -> SearchHit | None:
-    """Create a clearly-labelled structural result anchored to a real source line."""
-    candidate = base / path
-    if candidate.is_symlink():
-        return None
-    try:
-        resolved = candidate.resolve(strict=True)
-        resolved.relative_to(base)
-        lines = resolved.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeDecodeError, ValueError):
-        return None
+    """Create structural evidence from the exact source text in the snapshot."""
+    lines = document.content.splitlines()
     if not lines:
         return None
 
-    symbols = symbols_by_path.get(path, [])
+    item = document.metadata
+    symbols = symbols_by_path.get(item.path, [])
     ranked_symbols = []
     for symbol in symbols:
         symbol_terms = set(_tokens_with_identifiers(
@@ -60,12 +54,15 @@ def _context_hit(
     end = min(len(lines), index + context_lines + 1)
     excerpt = "\n".join(f"{line_no + 1}: {lines[line_no]}" for line_no in range(start, end))
     return SearchHit(
-        path=path,
+        path=item.path,
         start_line=index + 1,
         end_line=index + 1,
         score=round(score, 6),
         excerpt=excerpt,
         reason=reason,
+        sha256=item.sha256,
+        snapshot_id=snapshot.snapshot_id,
+        revision=snapshot.revision,
     )
 
 
@@ -79,12 +76,12 @@ def hybrid_search_repository(
     context_lines: int = 2,
     **scan_limits,
 ) -> list[SearchHit]:
-    """Rank direct lexical evidence and files connected by resolved import edges.
+    """Rank direct lexical evidence and graph-linked files from one source snapshot.
 
     Lexical matches remain the retrieval seeds. Graph expansion adds bounded, one-to-three
     hop dependency context and labels it explicitly; it never pretends that a related file
-    contains a direct query match. The final score is a weighted combination of normalised
-    lexical relevance and decayed graph proximity.
+    contains a direct query match. All text, symbols, imports, and citations derive from the
+    same content-addressed snapshot, avoiding repeated scans and mixed-source responses.
     """
     if not 1 <= top_k <= 100:
         raise ValueError("top_k must be between 1 and 100")
@@ -97,20 +94,22 @@ def hybrid_search_repository(
     if not query.strip():
         raise ValueError("Query must not be empty")
 
-    base = Path(root).expanduser().resolve(strict=True)
-    lexical_hits = search_repository(
-        base,
+    snapshot = create_snapshot(root, **scan_limits)
+    lexical_hits = search_snapshot(
+        snapshot,
         query,
         top_k=100,
         context_lines=context_lines,
-        **scan_limits,
     )
     if not lexical_hits:
         return []
 
-    report = analyze_repository(base, **scan_limits)
+    report = analyze_snapshot(snapshot)
     graph = build_graph(report)
     file_paths = {item.path for item in report.files}
+    documents_by_path = {
+        document.metadata.path: document for document in snapshot.documents
+    }
     adjacency: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     for edge in graph["edges"]:
         if edge["kind"] != "imports" or not edge["resolved"]:
@@ -162,7 +161,7 @@ def hybrid_search_repository(
         if len(graph_signals) >= _MAX_GRAPH_CANDIDATES:
             break
 
-    symbols_by_path: dict[str, list] = defaultdict(list)
+    symbols_by_path: dict[str, list[Symbol]] = defaultdict(list)
     for symbol in report.symbols:
         symbols_by_path[symbol.path].append(symbol)
     for path in symbols_by_path:
@@ -191,11 +190,17 @@ def hybrid_search_repository(
                 score=round(combined_score, 6),
                 excerpt=lexical_hit.excerpt,
                 reason=reason,
+                sha256=lexical_hit.sha256,
+                snapshot_id=snapshot.snapshot_id,
+                revision=snapshot.revision,
             ))
         elif graph_reason:
+            document = documents_by_path.get(path)
+            if document is None:
+                continue
             context_hit = _context_hit(
-                base,
-                path,
+                document,
+                snapshot,
                 query_terms,
                 symbols_by_path,
                 context_lines,

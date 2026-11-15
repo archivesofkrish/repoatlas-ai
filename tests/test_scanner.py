@@ -1,7 +1,7 @@
+import hashlib
 from pathlib import Path
 
-
-from repoatlas.scanner import scan_files
+from repoatlas.scanner import create_snapshot, scan_files
 
 
 def test_scanner_indexes_text_and_excludes_sensitive_and_generated(tmp_path: Path):
@@ -35,3 +35,22 @@ def test_scanner_does_not_follow_file_symlinks(tmp_path: Path):
     files, excluded, _ = scan_files(tmp_path)
     assert files == []
     assert excluded["symlink"] == 1
+
+
+def test_snapshot_is_content_addressed_and_retains_captured_text(tmp_path: Path):
+    source = tmp_path / "module.py"
+    original = "def original_symbol():\n    return 1\n"
+    source.write_text(original, encoding="utf-8")
+
+    snapshot = create_snapshot(tmp_path)
+    assert len(snapshot.documents) == 1
+    assert isinstance(snapshot.excluded, tuple)
+    assert isinstance(snapshot.warnings, tuple)
+    document = snapshot.documents[0]
+    assert document.metadata.path == "module.py"
+    assert document.content == original
+    assert document.metadata.sha256 == hashlib.sha256(original.encode()).hexdigest()
+
+    source.write_text("def replacement_symbol():\n    return 2\n", encoding="utf-8")
+    assert document.content == original
+    assert create_snapshot(tmp_path).snapshot_id != snapshot.snapshot_id

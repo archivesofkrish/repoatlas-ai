@@ -1,4 +1,4 @@
-"""Deterministic lexical retrieval with line-level evidence references."""
+"""Deterministic lexical retrieval over immutable repository snapshots."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from repoatlas.models import SearchHit
-from repoatlas.scanner import scan_files
+from repoatlas.models import RepositorySnapshot, SearchHit
+from repoatlas.scanner import create_snapshot
 
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+")
 STOPWORDS = {
@@ -30,41 +30,36 @@ def _tokens_with_identifiers(text: str) -> list[str]:
     return tokens
 
 
-def search_repository(
-    root: str | Path,
+def search_snapshot(
+    snapshot: RepositorySnapshot,
     query: str,
     *,
     top_k: int = 8,
     context_lines: int = 2,
-    **scan_limits,
 ) -> list[SearchHit]:
-    """Return deterministic lexical matches; citations target the best matching line."""
+    """Search captured source text without any additional filesystem reads."""
     if not query.strip():
         raise ValueError("Query must not be empty")
     if not 1 <= top_k <= 100:
         raise ValueError("top_k must be between 1 and 100")
     if not 0 <= context_lines <= 20:
         raise ValueError("context_lines must be between 0 and 20")
-    base = Path(root).expanduser().resolve(strict=True)
-    files, _, _ = scan_files(base, **scan_limits)
     query_terms = _tokens_with_identifiers(query)
     if not query_terms:
         raise ValueError("Query did not contain searchable terms")
 
-    documents: list[tuple[str, list[str], list[str]]] = []
+    documents: list[tuple[str, list[str], list[str], str]] = []
     document_frequency: Counter[str] = Counter()
-    for item in files:
-        try:
-            lines = (base / item.path).read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeDecodeError):
-            continue
+    for document in snapshot.documents:
+        path = document.metadata.path
+        lines = document.content.splitlines()
         words = _tokens_with_identifiers("\n".join(lines))
-        documents.append((item.path, lines, words))
+        documents.append((path, lines, words, document.metadata.sha256))
         document_frequency.update(set(words))
 
     document_count = max(len(documents), 1)
     hits: list[SearchHit] = []
-    for path, lines, words in documents:
+    for path, lines, words, file_sha256 in documents:
         term_frequency = Counter(words)
         score = 0.0
         matched = []
@@ -96,6 +91,22 @@ def search_repository(
                 score=round(score, 4),
                 excerpt=excerpt,
                 reason="Matched terms: " + ", ".join(sorted(matched)),
+                sha256=file_sha256,
+                snapshot_id=snapshot.snapshot_id,
+                revision=snapshot.revision,
             )
         )
     return sorted(hits, key=lambda hit: (-hit.score, hit.path))[:top_k]
+
+
+def search_repository(
+    root: str | Path,
+    query: str,
+    *,
+    top_k: int = 8,
+    context_lines: int = 2,
+    **scan_limits,
+) -> list[SearchHit]:
+    """Capture a bounded snapshot and search it without re-reading indexed files."""
+    snapshot = create_snapshot(root, **scan_limits)
+    return search_snapshot(snapshot, query, top_k=top_k, context_lines=context_lines)

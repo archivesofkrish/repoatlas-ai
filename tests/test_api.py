@@ -19,6 +19,8 @@ def test_api_health_search_and_path_confinement(tmp_path: Path, monkeypatch):
     response = client.post("/v1/search", json={"path": ".", "query": "authenticate token"})
     assert response.status_code == 200
     assert response.json()["results"]
+    assert response.json()["results"][0]["sha256"]
+    assert response.json()["results"][0]["snapshot_id"]
     hybrid_response = client.post(
         "/v1/hybrid-search",
         json={"path": ".", "query": "authenticate token"},
