@@ -1,9 +1,12 @@
 """Evidence-first question answering without a model-provider dependency."""
 from __future__ import annotations
+
 from pathlib import Path
+
 from repoatlas.analyzer import analyze_repository
 from repoatlas.search import search_repository
 from repoatlas.security import redact_secrets
+
 
 def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
     base = Path(root).expanduser().resolve(strict=True)
