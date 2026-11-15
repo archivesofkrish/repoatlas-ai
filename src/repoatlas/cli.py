@@ -10,7 +10,9 @@ from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="repoatlas", description="Evidence-grounded repository intelligence")
+    parser = argparse.ArgumentParser(
+        prog="repoatlas", description="Evidence-grounded repository intelligence"
+    )
     parser.add_argument("--version", action="version", version=f"RepoAtlas AI {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     scan = sub.add_parser("scan", help="Summarise files, Python symbols, and imports")
@@ -36,7 +38,10 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"RepoAtlas scan — {result['root']}")
                 print(f"Revision: {result['revision'] or 'not a Git checkout'}")
-                print(f"Files: {result['stats']['files']} | Python symbols: {result['stats']['symbols']}")
+                print(
+                    f"Files: {result['stats']['files']} | "
+                    f"Python symbols: {result['stats']['symbols']}"
+                )
                 for item in result["files"]:
                     print(f"  {item['path']} ({item['language']}, {item['line_count']} lines)")
                 for warning in result["warnings"]:
