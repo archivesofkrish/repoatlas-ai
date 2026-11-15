@@ -2,370 +2,182 @@
 
 > **Understand any codebase. Follow the evidence. Make safer engineering decisions.**
 
-RepoAtlas AI is a planned, evidence-grounded codebase intelligence assistant. It helps developers understand unfamiliar repositories, discover how components interact, investigate engineering risks, and estimate the impact of proposed changes. Instead of producing answers from a repository name or a handful of loosely related snippets, RepoAtlas builds a navigable model of a specific repository revision and ties its explanations to source evidence.
+[![CI](https://github.com/archivesofkrish/repoatlas-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/archivesofkrish/repoatlas-ai/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Project status:** Concept and repository specification. This repository intentionally starts with this README only; implementation has not begun.
+RepoAtlas AI is an evidence-grounded codebase intelligence tool. It scans a repository without executing its code, extracts Python symbols and imports, searches source files, and produces line-addressable evidence packs for engineering questions.
 
----
+**Current release:** `0.1.0` — working read-only foundation. Retrieval is deterministic and lexical; the project does not yet call an LLM or claim semantic understanding.
 
-## 1. The problem
+## Why RepoAtlas?
 
-Understanding a large or unfamiliar software repository is expensive. A developer may need to read dozens of files before answering basic questions:
+Reading an unfamiliar repository is slow. Exact text search helps find names, but it does not explain what is connected, where an implementation lives, or which source lines support an answer. RepoAtlas combines bounded repository discovery, static structure extraction, and evidence-first retrieval so developers can investigate code with a trail they can verify.
 
-- Where does the application start, and what happens after startup?
-- Which modules call a particular function or depend on a particular interface?
-- Where are authentication, authorization, input validation, and secret handling implemented?
-- What happens when two requests execute at the same time?
-- Which tests cover a critical path, and which important behaviours are untested?
-- If a function or API changes, which components, tests, and documents might be affected?
-- Does the documentation still describe the code that actually exists?
+## Features in this release
 
-Traditional search finds matching text, but it does not reliably explain relationships. A general-purpose AI assistant can explain code, but without disciplined retrieval it may overlook files, mix versions, or confidently invent details.
+- **Safe repository scanning:** bounded file count and byte limits; skips generated directories, symlinks, unsupported formats, binary files, and common secret-bearing filenames.
+- **Python structure extraction:** discovers classes, functions, nested definitions, docstrings, and imports using `ast` without importing project modules.
+- **Revision awareness:** records the Git commit SHA when analysing a Git checkout.
+- **Evidence search:** deterministic lexical ranking returns source excerpts with file paths and line ranges.
+- **Question evidence packs:** packages relevant excerpts, scores, reasons, commit provenance, and explicit limitations. No ungrounded LLM narrative is generated.
+- **Credential hygiene:** redacts several common secret patterns from evidence excerpts. This is a defence-in-depth heuristic, not a secret scanner guarantee.
+- **CLI and optional API:** use locally from the terminal or expose a small FastAPI service restricted to a configured repository root.
+- **Automated tests and CI:** unit tests cover scanning, AST extraction, retrieval, citation validation, redaction, and CLI behaviour; GitHub Actions targets Python 3.11–3.13.
 
-RepoAtlas AI is designed to bridge that gap: **repository-aware retrieval + structural code intelligence + evidence-linked AI explanations**.
+## Quick start
 
-## 2. The proposed solution
+Requires Python 3.11 or newer.
 
-RepoAtlas analyses a pinned repository revision and creates a structured, searchable representation of it. A user can then ask natural-language questions or run focused engineering investigations.
+```bash
+git clone https://github.com/archivesofkrish/repoatlas-ai.git
+cd repoatlas-ai
 
-Every substantive answer should identify the source evidence that supports it: repository-relative file paths, line ranges, symbol names, and the exact commit being analysed. When evidence is missing or ambiguous, the system should say so rather than fill the gap with speculation.
+python -m venv .venv
+source .venv/bin/activate       # Windows: .venv\\Scripts\\activate
+python -m pip install --upgrade pip
+pip install -e '.[dev]'
 
-### Core capabilities
+repoatlas scan .
+repoatlas search . "authentication token validation" --top-k 8
+repoatlas ask . "Where are repository files scanned?"
+```
 
-| Capability | What it should do | Example question |
-|---|---|---|
-| Repository orientation | Summarise purpose, languages, entry points, major directories, and build/test commands | “Give me a guided tour of this repository.” |
-| Architecture discovery | Identify modules, components, interfaces, dependencies, and important execution paths | “Trace a request from the API endpoint to the database.” |
-| Code Q&A | Answer questions using retrieved source and structural context, with citations | “Where is the session token validated?” |
-| Engineering risk review | Surface review candidates involving security, reliability, concurrency, and maintainability | “Where could untrusted input reach a sensitive operation?” |
-| Change-impact analysis | Find callers, dependants, related tests, and documentation likely affected by a change | “What might break if this interface changes?” |
-| Test intelligence | Map tests to code paths and identify areas with weak or unclear coverage | “Which tests exercise this authentication flow?” |
-| Documentation drift | Compare documented commands, components, and configuration with repository evidence | “Which README instructions appear outdated?” |
-| Learning mode | Explain a code path from beginner-friendly concepts through implementation details | “Explain this module step by step.” |
+No API key, external service, database, or network access is required for the core CLI.
 
-These are intended capabilities, not claims that the current repository already implements them.
+## Commands
 
-## 3. Design principles
+### Scan a repository
 
-1. **Evidence before fluency.** A plausible explanation is not enough. Important claims must be traceable to the indexed revision.
-2. **Revision-aware answers.** An answer is associated with a commit SHA. Results from different revisions must not be silently mixed.
-3. **Structure plus language.** Combine syntax-aware code analysis, dependency information, lexical search, semantic retrieval, and language-model reasoning.
-4. **Uncertainty is a valid result.** The system must distinguish confirmed facts, reasonable inferences, and unanswered questions.
-5. **Read-only by default.** Analysis must not silently modify a repository, open a pull request, or execute arbitrary code.
-6. **Least privilege.** Repository access should be limited to what the selected task requires.
-7. **Privacy by design.** Users must know what content is indexed, where it is processed, and whether an external model provider receives it.
-8. **Useful for learning.** Explanations should be navigable and adjustable from beginner-level summaries to technical detail.
+```bash
+repoatlas scan PATH
+repoatlas scan PATH --json
+```
 
-## 4. How it works
+Prints file inventory, Python symbols, imports, warnings, excluded-file counts, aggregate sizes, and Git revision metadata.
 
-RepoAtlas is intended to follow a pipeline with explicit, inspectable stages.
+### Search source evidence
+
+```bash
+repoatlas search PATH "query terms" --top-k 8
+```
+
+Returns ranked, line-addressable snippets. Ranking uses term frequency and inverse document frequency (a lightweight BM25-inspired score); it is not embedding-based semantic retrieval. Identifier splitting allows a query such as `create user` to match `create_user`. The citation points to the best-matching source line; surrounding context is included in the excerpt.
+
+### Build an evidence pack
+
+```bash
+repoatlas ask PATH "How does authentication work?" --top-k 6
+```
+
+Produces JSON with a question, repository revision, evidence citations, redacted excerpts, and limitations. It is deliberately an evidence pack rather than a pretend AI answer. A future LLM layer can consume these validated evidence objects.
+
+## Optional HTTP API
+
+Install the API extra:
+
+```bash
+pip install -e '.[api]'
+REPOATLAS_ROOT=/path/to/workspace uvicorn repoatlas.api:app --host 127.0.0.1 --port 8000
+```
+
+The service exposes these endpoints. All project paths are resolved beneath the configured root. This development API is not intended for public exposure without authentication and operational controls.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Health and read-only mode |
+| `POST /v1/scan` | Scan a project under the configured root |
+| `POST /v1/search` | Retrieve line-addressable evidence |
+| `POST /v1/ask` | Create a question evidence pack |
+
+Example:
+
+```bash
+curl -s http://127.0.0.1:8000/v1/ask \\
+  -H 'content-type: application/json' \\
+  -d '{"path":".","question":"Where is scanning implemented?","top_k":5}'
+```
+
+**Deployment note:** before exposing the service to a network, add authentication, authorization, rate limiting, request logging controls, and a managed worker boundary. Keep it bound to localhost unless the deployment is secured.
+
+## Architecture
 
 ```mermaid
 flowchart TD
-    A[Repository URL or local checkout] --> B[Access check and revision pinning]
-    B --> C[File discovery and filtering]
-    C --> D[Parsing and symbol extraction]
-    D --> E[Dependency and reference graph]
-    C --> F[Lexical index]
-    D --> G[Semantic chunks and embeddings]
-    E --> H[Repository context store]
-    F --> H
-    G --> H
-    H --> I[Question or investigation]
-    I --> J[Hybrid retrieval and evidence ranking]
-    J --> K[Context assembly and model reasoning]
-    K --> L[Answer with file and line citations]
-    L --> M[Evidence and answer-quality checks]
+    A[Local repository] --> B[Bounded scanner]
+    B --> C[File inventory + SHA-256]
+    B --> D[Text content]
+    D --> E[Python AST analyzer]
+    D --> F[Lexical index]
+    E --> G[Symbols + imports]
+    G --> H[Analysis report]
+    F --> I[Ranked source evidence]
+    H --> J[Question evidence pack]
+    I --> J
+    J --> K[Path + line + commit citations]
 ```
 
-### Stage 1 — Connect and pin the repository
-
-The user supplies a repository URL or a local checkout. RepoAtlas verifies access and records the exact commit SHA to be analysed. Pinning matters because a line citation is meaningful only when the underlying revision is known.
-
-### Stage 2 — Discover files safely
-
-The scanner inventories source files, tests, configuration, build scripts, and documentation. It respects ignore rules and excludes generated output, dependency caches, binaries, and sensitive material where possible. Secret detection and explicit exclusion rules should run before content is sent to any external model service.
-
-### Stage 3 — Parse code and extract structure
-
-Language-aware parsers identify files, modules, classes, functions, imports, exports, calls, and relevant declarations. Tree-sitter is a proposed foundation because it supports multiple programming languages and can recover useful syntax structure from incomplete code. Parsing is best-effort: unsupported or malformed files remain discoverable even when a complete syntax tree cannot be built.
-
-### Stage 4 — Build repository indexes
-
-RepoAtlas combines several complementary representations:
-
-- A **symbol index** for declarations and definitions.
-- A **dependency graph** for imports, references, and relationships that can be established from static analysis.
-- A **lexical index** for exact names, identifiers, and text.
-- A **semantic index** for meaning-oriented retrieval over carefully bounded code and documentation chunks.
-- A **metadata index** for file paths, language, revision, file type, and line ranges.
-
-No single index is sufficient. Exact search is excellent for known identifiers; semantic search can find conceptually related code; the graph helps explain how components connect.
-
-### Stage 5 — Retrieve evidence for a question
-
-A query is classified and expanded where useful. RepoAtlas retrieves relevant symbols, code ranges, tests, documentation, and graph neighbours. Results are ranked and deduplicated, while preserving their source revision and line locations. Context assembly should enforce token budgets without silently dropping important contradictory evidence.
-
-### Stage 6 — Generate and validate an explanation
-
-The language model receives a bounded evidence set and instructions to ground claims in it. An answer validator checks that cited paths and line ranges exist in the indexed revision and that the evidence is relevant to the associated claim. The system should label inferences and identify gaps rather than present them as confirmed facts.
-
-## 5. Proposed architecture
-
-The initial implementation should favour a modular monolith: one deployable application with clear internal boundaries. This reduces operational complexity while the data model and workflows are still evolving.
-
-| Component | Responsibility | Candidate technology |
-|---|---|---|
-| API layer | Authentication, request validation, project and query endpoints | Python, FastAPI, Pydantic |
-| Repository connector | Clone or read an authorised repository at a pinned revision | Git, GitHub App or narrowly scoped tokens |
-| Ingestion worker | File discovery, filtering, parsing, and indexing jobs | Python workers |
-| Parser layer | Language-aware syntax and symbol extraction | Tree-sitter and language-specific queries |
-| Graph/index layer | Store symbols, relationships, metadata, and search indexes | PostgreSQL; optionally pgvector |
-| Retrieval engine | Hybrid lexical, semantic, and graph retrieval | PostgreSQL full-text search, embeddings, graph queries |
-| AI orchestration | Prompt construction, model calls, structured output, and validation | Provider abstraction with typed interfaces |
-| Evaluation layer | Retrieval, citation, and answer-quality evaluation | Reproducible test datasets and automated evaluators |
-| User interface | Repository overview, chat, citations, graph views, and investigation reports | A lightweight web client, such as React or Next.js |
-
-These are proposed choices, not existing dependencies. Technology selection should be revisited after a small end-to-end prototype demonstrates the actual workload.
-
-### Data model (conceptual)
-
-The core entities are:
-
-- **Project:** a repository registered by a user or team.
-- **Revision:** an immutable repository commit SHA and ingestion status.
-- **File:** a repository-relative path and file metadata within a revision.
-- **Symbol:** a function, class, module, method, or other parsed declaration.
-- **Relationship:** a typed edge such as imports, calls, inherits, references, or tests.
-- **Chunk:** a bounded, line-addressable text unit used for retrieval.
-- **Embedding:** a vector associated with a chunk and embedding-model version.
-- **Investigation:** a user query, retrieved evidence, generated answer, and validation results.
-
-All indexed data must be revision-scoped. A new commit should create a new revision record rather than mutate the meaning of old citations.
-
-## 6. Example user experience
-
-A developer connects a repository and asks:
-
-> “Explain how authentication works, identify the trust boundaries, and tell me which tests cover the flow.”
-
-A useful response should:
-
-1. Summarise the authentication flow in plain language.
-2. Trace the flow through the actual entry points, middleware, services, and data access code found in the repository.
-3. Link each important statement to a file path and line range.
-4. Identify where credentials are parsed, validated, stored, refreshed, and invalidated—only where the code supports those claims.
-5. List tests that exercise the flow and distinguish direct coverage from indirect or inferred coverage.
-6. Flag missing evidence and plausible review areas without declaring a vulnerability solely from a pattern match.
-7. State the commit SHA and indexing limitations.
-
-The result is not merely a generated summary. It is a navigable investigation that a developer can verify.
-
-## 7. Security, privacy, and responsible use
-
-A codebase may contain source code, proprietary logic, credentials, infrastructure details, and personal data. RepoAtlas must treat repository content as sensitive by default.
-
-### Repository access
-
-- Use the narrowest practical GitHub App permissions or read-only credentials.
-- Never request broad account access when a single-repository installation is sufficient.
-- Do not expose access tokens in logs, prompts, URLs, error messages, or stored project metadata.
-- Make repository disconnection and indexed-data deletion explicit and verifiable.
-
-### Secret and sensitive-data handling
-
-- Detect common secret patterns before indexing and before model submission.
-- Exclude environment files, private keys, credentials, and user-configured sensitive paths by default where appropriate.
-- Redact detected secrets from logs and model context.
-- Explain that automated secret detection is imperfect and cannot guarantee that all sensitive data is removed.
-
-### Model-provider boundaries
-
-- Clearly disclose which model provider receives code or derived context.
-- Support local or self-hosted model configurations as an option where practical.
-- Do not use customer repository content for model training unless the user has explicitly agreed and the provider arrangement permits it.
-- Define retention, deletion, and access-control behaviour for prompts, responses, embeddings, and cached content.
-
-### Untrusted repository content
-
-Source files, comments, documentation, issue text, and test fixtures are untrusted data—not instructions to the AI system. RepoAtlas must defend against prompt injection embedded in repository content. Retrieved text should be delimited as evidence, never elevated to system instructions. Any future tool execution must require explicit policy checks and sandboxing.
-
-### Safe analysis defaults
-
-- Read-only repository access.
-- No automatic code changes or commits.
-- No arbitrary build scripts, tests, or binaries executed during ingestion.
-- No network access from analysis workers unless specifically required and constrained.
-- Resource limits for file size, archive expansion, parsing time, and indexing jobs.
-- Audit events for repository connection, ingestion, querying, and deletion.
-
-RepoAtlas is an engineering aid, not a substitute for security review, testing, or professional judgement. A flagged pattern is a lead to investigate, not proof of exploitability.
-
-## 8. Evaluation: how we will know it works
-
-The project should be evaluated against reproducible repositories and questions with human-verified evidence. A fluent answer is not necessarily a correct answer.
-
-| Evaluation area | Example measure | What it tells us |
-|---|---|---|
-| Retrieval quality | Recall@k, precision@k, mean reciprocal rank | Whether useful source evidence is retrieved |
-| Citation correctness | Valid citation rate, line-range accuracy | Whether citations point to real and relevant code |
-| Groundedness | Supported-claim ratio from expert review | Whether important statements follow from evidence |
-| Answer completeness | Task-specific rubric score | Whether the response covers the requested workflow |
-| Risk review quality | Precision and recall on labelled findings | Whether findings are useful without excessive noise |
-| Change-impact quality | Recall of affected files and tests | Whether likely downstream effects are found |
-| Performance | Ingestion time, query latency, resource use | Whether the system is practical at different repository sizes |
-| Robustness | Results across languages, malformed files, and prompt-injection fixtures | Whether performance survives realistic edge cases |
-
-Evaluation datasets should include positive and negative examples, multiple languages, small and large repositories, ambiguous questions, and files containing hostile instructions. Results should record model versions, parser versions, embedding versions, index configuration, and the tested commit SHA.
-
-## 9. Development roadmap
-
-The roadmap is intentionally incremental. Each phase should produce a working, testable result before the next phase expands scope.
-
-### Phase 0 — Specification and repository foundation
-
-- Define project goals, non-goals, terminology, and architecture.
-- Establish contribution, security, and documentation conventions.
-- Decide supported languages and a small representative evaluation corpus.
-- Record design decisions and measurable acceptance criteria.
-
-**Exit condition:** the initial design is reviewed and the first vertical-slice scope is agreed.
-
-### Phase 1 — Repository ingestion and evidence-backed Q&A
-
-- Connect to a public repository or a local checkout.
-- Pin and record a commit SHA.
-- Discover and filter repository files.
-- Build line-addressable chunks and lexical search.
-- Answer a small set of repository questions with verifiable file and line citations.
-
-**Exit condition:** users can ask basic questions about a pinned repository, and citations can be programmatically checked.
-
-### Phase 2 — Structural code intelligence
-
-- Add Tree-sitter parsing for the first supported languages.
-- Extract symbols, imports, references, and test relationships.
-- Build a navigable dependency graph.
-- Improve retrieval using symbol and graph context.
-
-**Exit condition:** the system can explain selected code paths and module relationships more reliably than lexical retrieval alone.
-
-### Phase 3 — Engineering investigations
-
-- Add guided security and reliability review workflows.
-- Add test discovery and change-impact analysis.
-- Separate confirmed findings from hypotheses and missing evidence.
-- Create human-reviewed benchmark cases.
-
-**Exit condition:** investigations produce reproducible evidence packages with measured precision and recall.
-
-### Phase 4 — Usable product and team workflows
-
-- Add project dashboards, investigation history, and interactive citations.
-- Implement workspace-level access controls and data-retention features.
-- Add incremental indexing for new commits.
-- Provide exportable reports and team review workflows.
-
-**Exit condition:** a small team can securely use RepoAtlas on real projects with predictable performance and clear data controls.
-
-### Phase 5 — Broader language and platform support
-
-- Expand language coverage based on evaluation results.
-- Add local-model and enterprise deployment options.
-- Improve monorepo, multi-service, and cross-repository analysis.
-- Explore IDE and CI integrations only after core quality is demonstrated.
-
-**Exit condition:** each new integration meets the same evidence, security, and evaluation standards as the core product.
-
-## 10. Non-goals for the initial version
-
-RepoAtlas should not begin as an autonomous software engineer. The first versions will not:
-
-- Automatically edit code, push commits, or merge pull requests.
-- Execute arbitrary repository scripts as part of indexing.
-- Claim to prove a repository secure or free from defects.
-- Guarantee complete call graphs or runtime behaviour from static analysis alone.
-- Support every programming language equally from day one.
-- Treat model-generated summaries as authoritative documentation.
-
-These boundaries keep the initial product focused on trustworthy understanding rather than premature automation.
-
-## 11. Proposed repository structure
-
-The repository is intentionally README-only at the start. As implementation begins, a structure like the following can evolve with the actual architecture:
+### Source layout
 
 ```text
-repoatlas-ai/
-├── README.md
-├── LICENSE
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── pyproject.toml
-├── .gitignore
-├── docs/
-│   ├── architecture/
-│   ├── decisions/
-│   ├── security/
-│   └── evaluation/
-├── src/
-│   └── repatlas/
-│       ├── api/
-│       ├── ingestion/
-│       ├── parsing/
-│       ├── indexing/
-│       ├── retrieval/
-│       ├── graph/
-│       ├── llm/
-│       └── evaluation/
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   ├── evaluation/
-│   └── fixtures/
-└── web/                     # optional UI, introduced when needed
+src/repoatlas/
+├── analyzer.py   # Git revision + Python AST analysis
+├── api.py        # Optional FastAPI endpoints and root confinement
+├── cli.py        # scan, search, ask commands
+├── models.py     # typed report, symbol, file, and hit models
+├── qa.py         # evidence-pack assembly and citation validation
+├── scanner.py    # bounded, read-only file discovery
+├── search.py     # deterministic lexical retrieval
+└── security.py   # heuristic secret detection and redaction
 ```
 
-The tree is illustrative. The implementation should not create empty packages merely to match this diagram; directories should appear when they contain purposeful, tested functionality.
+## Safety model and limitations
 
-## 12. Suggested first engineering milestone
+RepoAtlas treats repository content as untrusted input.
 
-The best first milestone is a thin end-to-end vertical slice, not a large collection of disconnected infrastructure:
+- It **does not import or execute project code** during scanning or static analysis.
+- It does not follow directory symlinks; file symlinks are excluded.
+- Default scan limits are 20,000 files, 1 MB per file, and 100 MB total content.
+- Common generated directories and sensitive filenames such as `.env` are excluded.
+- The API resolves requested paths under `REPOATLAS_ROOT` and rejects path traversal.
+- Citations are revision-aware and can be checked against the indexed snapshot.
+- Secret detection is pattern-based and incomplete. Do not point RepoAtlas at sensitive code unless your data-handling requirements permit it.
+- Python AST analysis cannot reveal dynamic imports, runtime call paths, reflection, or behaviour that only appears during execution.
+- Other languages are currently inventoried and searchable as text, but do not yet have language-specific symbol graphs.
+- Lexical retrieval can miss relevant code expressed with different terminology. A lack of results is not proof that a behaviour is absent.
 
-1. Accept a local repository path and a pinned commit.
-2. Safely enumerate tracked text files while respecting ignore and exclusion rules.
-3. Split files into line-addressable chunks.
-4. Index chunks for lexical search.
-5. Accept a natural-language question and retrieve a small evidence set.
-6. Produce an answer with exact file paths, line ranges, and commit SHA.
-7. Validate that every citation resolves to the indexed content.
-8. Add tests for path traversal, oversized files, binary files, secret redaction, malformed input, and prompt injection in source text.
+See [SECURITY.md](SECURITY.md) for the reporting policy and [CONTRIBUTING.md](CONTRIBUTING.md) for engineering standards.
 
-This milestone tests the central product promise—useful answers grounded in a real codebase—before investing in a graph database, complex UI, or broad autonomous workflows.
+## Testing and quality
 
-## 13. Principles for contributors
+```bash
+pytest -q
+ruff check src tests
+```
 
-Contributions should preserve the project's core promise: trustworthy, revision-aware explanations of software repositories.
+Tests use temporary repositories and synthetic fixtures; no external project or credential is needed. CI runs the test and lint suite on Python 3.11, 3.12, and 3.13.
 
-- Every feature should have a clear user problem and acceptance criteria.
-- Retrieval and generation changes should include evaluation evidence, not only anecdotal examples.
-- Security-sensitive changes should include threat analysis and negative tests.
-- New language support should include parser fixtures and representative retrieval tests.
-- Documentation must distinguish implemented behaviour from planned behaviour.
-- Performance claims should include the repository size, hardware, configuration, and measurement method.
-- Changes must not weaken read-only defaults or silently broaden repository permissions.
+## Roadmap
 
-Detailed contribution and security policies will be added when the implementation and collaboration workflow are established.
+| Stage | Target | Status |
+|---|---|---|
+| 1 | Safe scanner, Python symbols, lexical search, evidence packs, CLI, local API, tests, CI | **Implemented foundation** |
+| 2 | Tree-sitter multi-language parsing and dependency graph | Planned |
+| 3 | Hybrid lexical + vector + graph retrieval and evaluation benchmark | Planned |
+| 4 | LLM provider abstraction with claim-to-citation validation | Planned |
+| 5 | Change-impact analysis, test mapping, and guided engineering investigations | Planned |
+| 6 | Secure team workspaces, incremental indexing, and IDE/CI integrations | Planned |
 
-## 14. Current status
+The next milestone is a high-quality evaluation corpus and structural dependency graph. LLM generation comes after retrieval and citation quality can be measured.
 
-**Current state: specification only.** The repository begins with this README and does not yet contain an application, API, parser, index, database schema, tests, or deployment configuration.
+## Contributing
 
-The next step is to build and evaluate the Phase 1 vertical slice. Until then, all architecture and technology choices in this document should be read as proposals rather than implemented facts.
+Bug reports and pull requests are welcome. Please include tests, discuss security implications, and keep documentation honest about what is implemented versus planned. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-## 15. Project summary
-
-RepoAtlas AI aims to make software repositories easier to understand without sacrificing engineering accuracy. It combines code structure, hybrid retrieval, and language-model reasoning—but places source evidence, revision awareness, security, and uncertainty at the centre of every answer.
-
-**The goal is not to make AI sound like it understands a codebase. The goal is to make its understanding inspectable.**
+**RepoAtlas AI's central promise:** the goal is not to make AI sound like it understands a codebase. The goal is to make its understanding inspectable.
