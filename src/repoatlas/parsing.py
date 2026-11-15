@@ -53,6 +53,8 @@ DEFINITIONS = {
     "impl_item": "implementation",
     "mod_item": "module",
     "type_declaration": "type",
+    "type_alias_declaration": "type",
+    "abstract_class_declaration": "class",
 }
 NAME_NODE_TYPES = {
     "identifier", "type_identifier", "field_identifier", "property_identifier",
@@ -60,7 +62,7 @@ NAME_NODE_TYPES = {
 }
 IMPORT_NODE_TYPES = {
     "import_statement", "import_declaration", "use_declaration",
-    "preproc_include", "include_statement",
+    "preproc_include", "include_statement", "using_directive",
 }
 CALL_NODE_TYPES = {"call_expression", "call", "method_invocation", "macro_invocation"}
 
@@ -73,14 +75,26 @@ def _name_for(node: Any, source: bytes) -> str | None:
     name_node = node.child_by_field_name("name")
     if name_node is not None:
         return _text(name_node, source).strip()
+    def find_name(candidate: Any) -> str | None:
+        if candidate.type in NAME_NODE_TYPES:
+            return _text(candidate, source).strip()
+        for child in candidate.named_children:
+            found = find_name(child)
+            if found:
+                return found
+        return None
+
     for child in node.named_children:
-        if child.type in NAME_NODE_TYPES:
-            return _text(child, source).strip()
+        found = find_name(child)
+        if found:
+            return found
     return None
 
 
 def _callee_for(node: Any, source: bytes) -> str | None:
-    callee = node.child_by_field_name("function") or node.child_by_field_name("name")
+    callee = node.child_by_field_name("function")
+    if callee is None:
+        callee = node.child_by_field_name("name")
     if callee is None and node.named_children:
         callee = node.named_children[0]
     if callee is None:
@@ -123,12 +137,18 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
         }
 
     source_bytes = source.encode("utf-8")
-    parser = get_parser(grammar)
-    if hasattr(parser, "set_max_source_bytes"):
-        parser.set_max_source_bytes(1_000_000)
-    if hasattr(parser, "set_parse_timeout_ms"):
-        parser.set_parse_timeout_ms(250)
-    tree = parser.parse(source_bytes)
+    try:
+        parser = get_parser(grammar)
+        if hasattr(parser, "set_max_source_bytes"):
+            parser.set_max_source_bytes(1_000_000)
+        if hasattr(parser, "set_parse_timeout_ms"):
+            parser.set_parse_timeout_ms(250)
+        tree = parser.parse(source_bytes)
+    except Exception as exc:
+        return {
+            "symbols": [], "imports": [], "calls": [],
+            "warning": f"Tree-sitter could not parse {path}: {type(exc).__name__}.",
+        }
     root = tree.root_node
     symbols: list[Symbol] = []
     imports: list[dict[str, Any]] = []
