@@ -46,7 +46,7 @@ def test_relative_javascript_import_resolves_when_grammar_cached(tmp_path: Path)
         and edge["target"] == "src/worker.js"
         and edge["resolved"]
         for edge in graph["edges"]
-    ), report.warnings, graph["edges"]
+    ), (report.warnings, graph["edges"])
 
 
 def test_impact_rejects_unknown_target(tmp_path: Path):
