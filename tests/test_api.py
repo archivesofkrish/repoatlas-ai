@@ -132,9 +132,9 @@ def test_hybrid_search_request_rejects_non_finite_lexical_weight():
 
 def test_architecture_api_returns_dependency_insights(tmp_path: Path, monkeypatch):
     (tmp_path / "core.py").write_text(
-        "def calculate():\\n    return 1\\n", encoding="utf-8"
+        "def calculate():\n    return 1\n", encoding="utf-8"
     )
-    (tmp_path / "api.py").write_text("import core\\n", encoding="utf-8")
+    (tmp_path / "api.py").write_text("import core\n", encoding="utf-8")
     monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
 
     response = TestClient(api.app).post("/v1/architecture", json={"path": "."})
