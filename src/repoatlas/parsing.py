@@ -108,8 +108,16 @@ def _callee_for(node: Any, source: bytes) -> str | None:
 def _import_target(node: Any, source: bytes) -> str:
     raw = _text(node, source).strip()
     if node.type == "preproc_include":
-        match = re.search(r"[<\"]([^>\"]+)[>\"]", raw)
+        quoted = re.search(r'"([^"]+)"', raw)
+        if quoted:
+            target = quoted.group(1)
+            return target if target.startswith(("./", "../")) else f"./{target}"
+        match = re.search(r"<([^>]+)>", raw)
         return match.group(1) if match else raw
+    if node.type == "import_spec":
+        path_node = node.child_by_field_name("path")
+        raw = _text(path_node, source).strip() if path_node is not None else raw
+        return raw.strip("'\"")
     quoted = re.search(r"""['"]([^'"]+)['"]""", raw)
     if quoted:
         return quoted.group(1)
@@ -186,12 +194,71 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
                     docstring=None,
                 ))
                 current_scope = (*scope, name)
+        elif node.type == "variable_declarator":
+            # JavaScript/TypeScript commonly declare functions as const handlers = () => {}.
+            name_node = node.child_by_field_name("name")
+            value_node = node.child_by_field_name("value")
+            if (
+                name_node is not None
+                and value_node is not None
+                and value_node.type in {"arrow_function", "function_expression"}
+            ):
+                name = _text(name_node, source_bytes).strip()
+                if name:
+                    qualified = ".".join((*scope, name))
+                    symbols.append(Symbol(
+                        name=name,
+                        qualified_name=qualified,
+                        kind="function",
+                        path=path,
+                        start_line=node.start_point.row + 1,
+                        end_line=node.end_point.row + 1,
+                        docstring=None,
+                    ))
+                    current_scope = (*scope, name)
 
         if node.type in IMPORT_NODE_TYPES:
-            imports.append({
-                "target": _import_target(node, source_bytes),
-                "line": node.start_point.row + 1,
-            })
+            if node.type == "import_declaration":
+                specs = [child for child in node.named_children if child.type == "import_spec"]
+                if specs:
+                    for spec in specs:
+                        imports.append({
+                            "target": _import_target(spec, source_bytes),
+                            "line": spec.start_point.row + 1,
+                        })
+                else:
+                    imports.append({
+                        "target": _import_target(node, source_bytes),
+                        "line": node.start_point.row + 1,
+                    })
+            else:
+                imports.append({
+                    "target": _import_target(node, source_bytes),
+                    "line": node.start_point.row + 1,
+                })
+        elif node.type == "call_expression":
+            function_node = node.child_by_field_name("function")
+            arguments_node = node.child_by_field_name("arguments")
+            if (
+                function_node is not None
+                and _text(function_node, source_bytes).strip() == "require"
+                and arguments_node is not None
+                and arguments_node.named_children
+            ):
+                argument = _text(arguments_node.named_children[0], source_bytes).strip()
+                required = re.match(r"""['"]([^'"]+)['"]""", argument)
+                if required:
+                    imports.append({
+                        "target": required.group(1),
+                        "line": node.start_point.row + 1,
+                    })
+            callee = _callee_for(node, source_bytes)
+            if callee:
+                calls.append({
+                    "source": ".".join(scope) or path,
+                    "target": callee,
+                    "line": node.start_point.row + 1,
+                })
         elif node.type in CALL_NODE_TYPES:
             callee = _callee_for(node, source_bytes)
             if callee:

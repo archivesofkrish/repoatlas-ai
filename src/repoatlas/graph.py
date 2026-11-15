@@ -19,38 +19,53 @@ class GraphEdge:
     resolved: bool
 
 
+_MODULE_SUFFIXES = (
+    ".py", ".pyi", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts",
+    ".go", ".rs", ".java", ".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh",
+    ".rb", ".cs",
+)
+_INDEX_FILES = (
+    "index.py", "index.js", "index.jsx", "index.mjs", "index.cjs",
+    "index.ts", "index.tsx", "__init__.py",
+)
+_SOURCE_ROOTS = ("src", "lib", "app", "include", "packages")
+
+
+def _module_candidates(base: str) -> list[str]:
+    return [
+        base,
+        *(base + suffix for suffix in _MODULE_SUFFIXES),
+        *(posixpath.join(base, name) for name in _INDEX_FILES),
+    ]
+
+
 def _resolve_module(module: str, files: set[str], source_path: str) -> str | None:
+    """Resolve only structurally plausible module paths; ambiguity stays unresolved."""
     cleaned = module.strip().strip("'").strip('"').replace("\\", "/")
     if not cleaned or cleaned.startswith(("http://", "https://")):
         return None
+
     if cleaned.startswith(("./", "../")):
-        # JavaScript/TypeScript relative paths are filesystem-like specifiers.
-        base = posixpath.normpath(posixpath.join(posixpath.dirname(source_path), cleaned))
+        bases = [posixpath.normpath(posixpath.join(posixpath.dirname(source_path), cleaned))]
     elif cleaned.startswith("."):
-        # Python relative imports use leading dots as package traversal levels.
+        # Python relative imports count leading dots as package traversal levels.
         level = len(cleaned) - len(cleaned.lstrip("."))
         remainder = cleaned[level:]
         package_dir = posixpath.dirname(source_path)
         for _ in range(max(level - 1, 0)):
             package_dir = posixpath.dirname(package_dir)
-        base = posixpath.normpath(
-            posixpath.join(package_dir, remainder.replace(".", "/"))
-        )
+        bases = [posixpath.normpath(posixpath.join(package_dir, remainder.replace(".", "/")))]
     else:
         base = cleaned.replace(".", "/").lstrip("/")
-    candidates = [
-        base, base + ".py", base + ".js", base + ".jsx", base + ".ts",
-        base + ".tsx", base + ".go", base + ".rs", base + ".java",
-        base + "/__init__.py", base + "/index.js", base + "/index.ts",
-    ]
-    for candidate in candidates:
-        if candidate in files:
-            return candidate
-    matches = [
-        path for path in files
-        if path.rsplit("/", 1)[-1].split(".")[0] == cleaned
-    ]
-    return sorted(matches)[0] if len(matches) == 1 else None
+        bases = [base, *(posixpath.join(root, base) for root in _SOURCE_ROOTS)]
+
+    matches = {
+        candidate
+        for base in bases
+        for candidate in _module_candidates(base)
+        if candidate in files
+    }
+    return next(iter(matches)) if len(matches) == 1 else None
 
 
 def build_graph(report: AnalysisReport) -> dict:
@@ -69,8 +84,13 @@ def build_graph(report: AnalysisReport) -> dict:
             if isinstance(item, dict):
                 target = str(item.get("target", ""))
                 line = int(item.get("line", 1))
+                imported_names = [
+                    str(name) for name in item.get("names", [])
+                    if isinstance(name, str) and name != "*"
+                ]
             else:
-                target, line = str(item), 1
+                target, line, imported_names = str(item), 1, []
+
             resolved = _resolve_module(target, file_paths, path)
             edges.append(GraphEdge(
                 source=path,
@@ -80,6 +100,24 @@ def build_graph(report: AnalysisReport) -> dict:
                 line=line,
                 resolved=resolved is not None,
             ))
+
+            # A from-import may reference both a package initializer and a sibling module.
+            for imported_name in imported_names:
+                submodule = (
+                    f"{target}{imported_name}"
+                    if target.endswith(".")
+                    else f"{target}.{imported_name}"
+                )
+                submodule_resolved = _resolve_module(submodule, file_paths, path)
+                if submodule_resolved and submodule_resolved != resolved:
+                    edges.append(GraphEdge(
+                        source=path,
+                        target=submodule_resolved,
+                        kind="imports",
+                        path=path,
+                        line=line,
+                        resolved=True,
+                    ))
 
     for path, calls in report.calls.items():
         for call in calls:

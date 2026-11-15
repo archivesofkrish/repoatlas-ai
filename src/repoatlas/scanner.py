@@ -91,7 +91,13 @@ def scan_files(
         kept_dirs = []
         for name in sorted(dirs):
             candidate = current_path / name
-            if name in ignores or name.lower() in SENSITIVE_DIRECTORIES or candidate.is_symlink():
+            relative_directory = normalized_relative_path(base, candidate).lower()
+            sensitive_directory = (
+                name.lower() in {".aws", ".ssh", ".gnupg"}
+                or relative_directory == ".config/gcloud"
+                or relative_directory.startswith(".config/gcloud/")
+            )
+            if name in ignores or sensitive_directory or candidate.is_symlink():
                 excluded["ignored" if not candidate.is_symlink() else "symlink"] += 1
             else:
                 kept_dirs.append(name)

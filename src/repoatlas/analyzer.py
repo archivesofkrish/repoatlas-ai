@@ -33,12 +33,25 @@ class _PythonVisitor(ast.NodeVisitor):
         self.path = path
         self.scope: list[str] = []
         self.symbols: list[Symbol] = []
-        self.imports: list[str] = []
+        self.imports: list[dict[str, object]] = []
         self.calls: list[dict[str, object]] = []
 
     def _visit_definition(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, kind: str
     ):
+        # These expressions execute in the enclosing scope, not in the definition.
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.visit(node.args)
+            if node.returns is not None:
+                self.visit(node.returns)
+        else:
+            for base in node.bases:
+                self.visit(base)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+
         self.scope.append(node.name)
         self.symbols.append(Symbol(
             name=node.name, qualified_name=".".join(self.scope), kind=kind, path=self.path,
@@ -75,10 +88,17 @@ class _PythonVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import):
-        self.imports.extend(alias.name for alias in node.names)
+        self.imports.extend(
+            {"target": alias.name, "line": node.lineno, "names": []}
+            for alias in node.names
+        )
 
     def visit_ImportFrom(self, node: ast.ImportFrom):
-        self.imports.append("." * node.level + (node.module or ""))
+        self.imports.append({
+            "target": "." * node.level + (node.module or ""),
+            "line": node.lineno,
+            "names": [alias.name for alias in node.names],
+        })
 
 
 def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
@@ -105,7 +125,7 @@ def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
             visitor = _PythonVisitor(item.path)
             visitor.visit(tree)
             report.symbols.extend(visitor.symbols)
-            report.imports[item.path] = sorted(set(visitor.imports))
+            report.imports[item.path] = visitor.imports
             report.calls[item.path] = visitor.calls
         elif Path(item.path).suffix.lower() in EXTENSION_GRAMMARS:
             parsed = parse_tree_sitter_file(item.path, source)

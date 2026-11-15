@@ -175,7 +175,7 @@ RepoAtlas treats repository content as untrusted input.
 - It does **not** import or execute repository code during scanning or static analysis.
 - It does not follow directory symlinks; file symlinks are excluded.
 - Default scan limits are 20,000 files, 1 MB per file, and 100 MB total content.
-- Common generated directories and sensitive filenames such as `.env` are excluded.
+- Common generated directories, sensitive filenames such as `.env`, and credential stores such as `.aws`, `.ssh`, and `.config/gcloud` are excluded.
 - Tree-sitter grammar installation is explicit. A scan never downloads a grammar.
 - The API resolves paths beneath `REPOATLAS_ROOT` and rejects path traversal.
 - Secret detection is heuristic and incomplete. It cannot guarantee that every credential has been removed.
