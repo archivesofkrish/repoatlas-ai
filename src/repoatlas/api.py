@@ -9,6 +9,7 @@ except ImportError as exc:
     raise RuntimeError("Install the API extra: pip install -e '.[api]'") from exc
 
 from repoatlas.analyzer import analyze_repository
+from repoatlas.graph import build_graph, impact_analysis
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 
@@ -20,6 +21,16 @@ class AskRequest(BaseModel):
     path: str = "."
     question: str = Field(min_length=2, max_length=2000)
     top_k: int = Field(default=6, ge=1, le=20)
+
+class GraphRequest(BaseModel):
+    path: str = "."
+
+
+class ImpactRequest(BaseModel):
+    path: str = "."
+    target: str = Field(min_length=1, max_length=500)
+    max_depth: int = Field(default=5, ge=1, le=20)
+
 
 class SearchRequest(BaseModel):
     path: str = "."
@@ -73,4 +84,24 @@ def ask(payload: AskRequest):
     try:
         return answer_question(path, payload.question, top_k=payload.top_k)
     except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+
+@app.post("/v1/graph")
+def graph_endpoint(payload: GraphRequest):
+    path = resolve_project_path(payload.path)
+    try:
+        return build_graph(analyze_repository(path))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/impact")
+def impact_endpoint(payload: ImpactRequest):
+    path = resolve_project_path(payload.path)
+    try:
+        graph_data = build_graph(analyze_repository(path))
+        return impact_analysis(graph_data, payload.target, max_depth=payload.max_depth)
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
