@@ -124,13 +124,15 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
         return {"symbols": [], "imports": [], "calls": [], "warning": None}
 
     try:
-        from tree_sitter_language_pack import get_parser, has_parser
+        from tree_sitter_language_pack import downloaded_languages, get_parser
     except ImportError:
         return {
             "symbols": [], "imports": [], "calls": [],
             "warning": "Install the 'parsing' extra to enable Tree-sitter analysis.",
         }
-    if not has_parser(grammar):
+    # Check the local cache first. get_parser may download grammars on demand, which
+    # must never happen during repository ingestion.
+    if grammar not in set(downloaded_languages()):
         return {
             "symbols": [], "imports": [], "calls": [],
             "warning": (
@@ -146,7 +148,7 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
             parser.set_max_source_bytes(1_000_000)
         if hasattr(parser, "set_parse_timeout_ms"):
             parser.set_parse_timeout_ms(250)
-        tree = parser.parse(source_bytes)
+        tree = parser.parse(source)
     except Exception as exc:
         return {
             "symbols": [], "imports": [], "calls": [],
