@@ -29,11 +29,15 @@ def resolve_project_path(raw: str) -> Path:
     try:
         candidate = (ALLOWED_ROOT / raw).resolve(strict=True)
     except OSError as exc:
-        raise HTTPException(status_code=400, detail="Repository path does not exist or cannot be accessed") from exc
+        raise HTTPException(
+            status_code=400, detail="Repository path does not exist or cannot be accessed"
+        ) from exc
     try:
         candidate.relative_to(ALLOWED_ROOT)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Repository path escapes configured root") from exc
+        raise HTTPException(
+            status_code=400, detail="Repository path escapes configured root"
+        ) from exc
     if not candidate.is_dir():
         raise HTTPException(status_code=400, detail="Repository path must be a directory")
     return candidate
