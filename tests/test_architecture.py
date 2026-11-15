@@ -29,11 +29,11 @@ def test_architecture_report_detects_cycles_packages_and_hotspots(tmp_path: Path
     assert result["stats"]["dependency_cycles"] == 1
     assert result["stats"]["files_in_cycles"] == 2
     assert result["stats"]["isolated_files"] >= 1
-    assert result["cycles"] == [["app/services/auth.py", "app/services/tokens.py"]]
-    auth = next(item for item in result["files"] if item["path"] == "app/services/auth.py")
+    assert result["cycles"] == [["services/auth.py", "services/tokens.py"]]
+    auth = next(item for item in result["files"] if item["path"] == "services/auth.py")
     assert auth["in_cycle"] is True
-    assert auth["fan_in"] == 1
-    assert any(item["source"] == "app" for item in result["package_dependencies"])
+    assert auth["fan_in"] == 2
+    assert any(item["source"] == "." and item["target"] == "services" for item in result["package_dependencies"])
 
 
 def test_architecture_report_is_deterministic_and_keeps_unresolved_count(tmp_path: Path):
