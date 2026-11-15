@@ -121,7 +121,7 @@ def test_api_answer_skips_provider_when_no_evidence_exists(tmp_path: Path, monke
 
 
 def test_hybrid_search_request_rejects_non_finite_lexical_weight():
-    from fastapi import ValidationError
+    from pydantic import ValidationError
 
     import pytest
 
