@@ -44,3 +44,7 @@ When adding a parser adapter or resolver rule, add tests for:
 ## Interpreting coverage
 
 Coverage is a regression guard, not a correctness proof. The enforced 80% floor helps prevent untested growth, while code review and focused adversarial tests remain necessary—especially for parsers, path handling, and dependency inference.
+
+## HTTP input validation
+
+The local API validates request shape and numeric bounds before analysis begins. Workspace paths must resolve to existing directories below `REPOATLAS_ROOT`; inaccessible paths and paths that escape the workspace are rejected. Hybrid-search numeric fields reject non-finite values such as NaN and infinity. Keep the service bound to localhost unless an authentication, authorization, rate-limiting and isolation layer is added.
