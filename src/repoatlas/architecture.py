@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import jsonfrom pathlib import Path
+import html
+import json
+from pathlib import Path
 from typing import Any
 
 
@@ -232,7 +234,7 @@ def render_architecture_html(
         "omitted_files": max(0, len(all_files) - len(selected)),
     }
     embedded = _safe_json(payload)
-    repo_name = str(report.get("repository", "Repository")).replace("<", "&lt;").replace(">", "&gt;")
+    repo_name = html.escape(str(report.get("repository", "Repository")), quote=True)
     document = """<!doctype html>
 <html lang="en">
 <head>
