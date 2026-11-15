@@ -26,8 +26,19 @@ jobs:
           cache: pip
       - name: Install package and test dependencies
         run: python -m pip install --upgrade pip && pip install -e '.[dev]'
-      - name: Cache Tree-sitter grammars used by tests
-        run: python -c "from repoatlas.parsing import supported_grammar_names; from tree_sitter_language_pack import download, manifest_languages; requested=set(supported_grammar_names()); available=set(manifest_languages()); missing=sorted(requested-available); assert not missing, f'Unsupported Tree-sitter grammars: {missing}'; download(sorted(requested))"
+      - name: Validate and cache Tree-sitter grammars
+        run: |
+          python - <<'PY'
+          from repoatlas.parsing import supported_grammar_names
+          from tree_sitter_language_pack import download, manifest_languages
+
+          requested = set(supported_grammar_names())
+          available = set(manifest_languages())
+          missing = sorted(requested - available)
+          if missing:
+              raise SystemExit(f"Unsupported Tree-sitter grammars: {missing}")
+          download(sorted(requested))
+          PY
       - name: Lint
         run: ruff check src tests
       - name: Test
