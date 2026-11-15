@@ -22,14 +22,10 @@ def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
         evidence.append({
             "citation": {"path": hit.path, "start_line": hit.start_line,
                          "end_line": hit.end_line, "revision": report.revision},
-            "score": hit.score,
-            "reason": hit.reason,
-            "excerpt": redact_secrets(hit.excerpt),
+            "score": hit.score, "reason": hit.reason, "excerpt": redact_secrets(hit.excerpt),
         })
     return {
-        "question": question,
-        "repository": str(base),
-        "revision": report.revision,
+        "question": question, "repository": str(base), "revision": report.revision,
         "answer": (
             "The following repository evidence is relevant to your question. "
             "This baseline release provides retrieved evidence, not an LLM-generated conclusion. "
@@ -53,12 +49,15 @@ def validate_citation(root: str | Path, citation: dict) -> bool:
     raw = citation.get("path", "")
     if not isinstance(raw, str) or not raw or Path(raw).is_absolute() or ".." in Path(raw).parts:
         return False
-    target = (base / raw).resolve(strict=False)
+    unresolved = base / raw
+    if unresolved.is_symlink():
+        return False
+    target = unresolved.resolve(strict=False)
     try:
         target.relative_to(base)
     except ValueError:
         return False
-    if target.is_symlink() or not target.is_file():
+    if not target.is_file():
         return False
     try:
         line_count = len(target.read_text(encoding="utf-8").splitlines())
