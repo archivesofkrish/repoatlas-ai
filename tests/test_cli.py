@@ -25,3 +25,35 @@ def test_cli_hybrid_search(tmp_path: Path, capsys):
     ]) == 0
     output = capsys.readouterr().out
     assert "core.py" in output
+
+
+
+def test_cli_answer_uses_grounded_answer_layer(tmp_path: Path, capsys, monkeypatch):
+    import repoatlas.cli as cli
+
+    def fake_answer(root, question, *, top_k):
+        return {
+            "answer": "Evidence-supported findings: token check exists [E1]",
+            "generation_status": "generated",
+            "top_k": top_k,
+        }
+
+    monkeypatch.setattr(cli, "generate_grounded_answer", fake_answer)
+    assert main([
+        "answer", str(tmp_path), "How are tokens checked?", "--top-k", "4",
+    ]) == 0
+    output = capsys.readouterr().out
+    assert "Evidence-supported findings" in output
+    assert '"top_k": 4' in output
+
+
+def test_cli_answer_reports_missing_provider(tmp_path: Path, capsys, monkeypatch):
+    import repoatlas.cli as cli
+    from repoatlas.llm import ProviderError
+
+    def unavailable(*_args, **_kwargs):
+        raise ProviderError("No model provider is configured.")
+
+    monkeypatch.setattr(cli, "generate_grounded_answer", unavailable)
+    assert main(["answer", str(tmp_path), "Explain token validation"]) == 2
+    assert "No model provider is configured." in capsys.readouterr().err

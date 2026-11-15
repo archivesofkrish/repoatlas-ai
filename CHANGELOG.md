@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 - 2026-11-15
+
+- Add an optional OpenAI Responses API provider behind the `llm` extra.
+- Add CLI `repoatlas answer` and HTTP endpoint `POST /v1/answer`; keep `ask` retrieval-only.
+- Require strict structured claim output with one or more allow-listed evidence IDs per claim.
+- Revalidate repository containment, line ranges, and cited-file SHA-256 after generation.
+- Skip provider calls when retrieval returns no evidence; reject unknown or stale citations.
+- Send only bounded, secret-redacted retrieved excerpts and the question when answer generation is explicitly invoked.
+- Add LLM safety guidance and fake-provider tests; no live API key is required by CI.
+
+
 ## 0.4.0 - 2026-11-15
 
 - Introduce bounded, content-addressed in-memory repository snapshots.

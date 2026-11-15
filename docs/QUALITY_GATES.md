@@ -14,6 +14,8 @@ The GitHub Actions workflow runs on Python 3.11, 3.12, 3.13, and 3.14. Each matr
 
 The CI matrix is the source of truth for compatibility claims. A local run on one interpreter does not establish that every matrix version passes.
 
+Optional LLM code is tested with fake providers in CI; CI never requires an API key or makes external model calls. The live provider integration must be exercised separately by an operator with an approved API key and model configuration.
+
 ## Security and resource boundaries
 
 - The scanner uses bounded file count and byte limits and excludes symlinks, common generated directories, common credential stores, and sensitive filenames.
@@ -24,10 +26,13 @@ The CI matrix is the source of truth for compatibility claims. A local run on on
 - Python modules from the scanned repository are never imported or executed.
 - Import resolution and call-reference resolution are conservative. Ambiguous or insufficiently evidenced edges remain unresolved.
 - Impact analysis is a static estimate over resolved import edges; it is not a proof of runtime blast radius.
+- Optional model requests receive only the user question and retrieved, secret-redacted excerpts—not the full repository. The provider receives source code only when the answer command or endpoint is explicitly invoked.
+- Model output is constrained to a strict JSON schema. Every claim must reference evidence IDs from the retrieved pack; unknown IDs and stale file hashes are rejected.
+- Citation validation establishes path containment, line bounds, and file-hash freshness. It does not prove semantic entailment. Prompt-injection resistance is a defence-in-depth measure, not a guarantee.
 
 ## Test design
 
-Tests use temporary directories and synthetic fixtures. They cover the scanner's exclusions, parser fallbacks, language extraction, graph resolution, transitive impact, CLI/API behaviour, evidence citations, and credential redaction.
+Tests use temporary directories and synthetic fixtures. They cover the scanner's exclusions, parser fallbacks, language extraction, graph resolution, transitive impact, CLI/API behaviour, evidence citations, credential redaction, strict LLM output validation, unknown evidence IDs, stale citations, and provider failure paths.
 
 When adding a parser adapter or resolver rule, add tests for:
 - a representative valid source fixture;
