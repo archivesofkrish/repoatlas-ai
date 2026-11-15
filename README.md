@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.5.0` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, CLI, and local API.
+**Current release:** `0.5.1` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, bounded local API, and strict API path/numeric input validation.
 
 ## Why RepoAtlas?
 
@@ -164,7 +164,7 @@ curl -s http://127.0.0.1:8000/v1/graph \\
   -d '{"path":"my-project"}'
 ```
 
-The API confines requested paths to `REPOATLAS_ROOT`. It is a local development interface, not a production multi-tenant service. Add authentication, authorization, rate limits, worker isolation, and operational controls before network exposure. The `/v1/answer` route requires the optional `llm` dependency and `OPENAI_API_KEY`; only retrieved, redacted excerpts and the question are sent to the provider.
+The API confines requested paths to `REPOATLAS_ROOT`, rejects non-finite hybrid-search weights, and validates bounded request fields. It is a local development interface, not a production multi-tenant service. Add authentication, authorization, rate limits, worker isolation, and operational controls before network exposure. The `/v1/answer` route requires the optional `llm` dependency and `OPENAI_API_KEY`; only retrieved, redacted excerpts and the question are sent to the provider.
 
 ## Architecture
 
