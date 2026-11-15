@@ -34,7 +34,9 @@ class _PythonVisitor(ast.NodeVisitor):
         self.symbols: list[Symbol] = []
         self.imports: list[str] = []
 
-    def _visit_definition(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, kind: str):
+    def _visit_definition(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, kind: str
+    ):
         self.scope.append(node.name)
         self.symbols.append(Symbol(
             name=node.name, qualified_name=".".join(self.scope), kind=kind, path=self.path,
@@ -65,7 +67,9 @@ def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
     """Scan a repository and extract Python symbols/imports without importing code."""
     base = Path(root).expanduser().resolve(strict=True)
     files, excluded, warnings = scan_files(base, **scan_limits)
-    report = AnalysisReport(root=str(base), revision=get_revision(base), excluded=excluded, warnings=warnings)
+    report = AnalysisReport(
+        root=str(base), revision=get_revision(base), excluded=excluded, warnings=warnings
+    )
     report.files = files
 
     for item in files:
