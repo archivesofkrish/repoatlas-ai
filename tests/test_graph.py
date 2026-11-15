@@ -55,10 +55,10 @@ def test_python_package_relative_import_resolves(tmp_path: Path):
     (tmp_path / "src" / "__init__.py").write_text("", encoding="utf-8")
     (package / "__init__.py").write_text("", encoding="utf-8")
     (package / "api.py").write_text(
-        "from .utils import helper\\n", encoding="utf-8"
+        "from .utils import helper\n", encoding="utf-8"
     )
     (package / "utils.py").write_text(
-        "def helper():\\n    return True\\n", encoding="utf-8"
+        "def helper():\n    return True\n", encoding="utf-8"
     )
     graph = build_graph(analyze_repository(tmp_path))
     assert any(
