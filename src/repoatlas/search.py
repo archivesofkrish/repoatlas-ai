@@ -19,7 +19,7 @@ def tokenize(text: str) -> list[str]:
 
 
 def _tokens_with_identifiers(text: str) -> list[str]:
-    """Tokenize identifiers both whole and by underscore/camel-like boundaries."""
+    """Tokenize identifiers both whole and by underscore boundaries."""
     tokens = tokenize(text)
     for token in list(tokens):
         tokens.extend(part.lower() for part in re.split(r"[_\\W]+", token) if len(part) > 1)
@@ -27,14 +27,9 @@ def _tokens_with_identifiers(text: str) -> list[str]:
 
 
 def search_repository(
-    root: str | Path,
-    query: str,
-    *,
-    top_k: int = 8,
-    context_lines: int = 2,
-    **scan_limits,
+    root: str | Path, query: str, *, top_k: int = 8, context_lines: int = 2, **scan_limits,
 ) -> list[SearchHit]:
-    """Return deterministic lexical matches with verifiable path and line ranges."""
+    """Return deterministic lexical matches; citations target the best matching line."""
     if not query.strip():
         raise ValueError("Query must not be empty")
     if not 1 <= top_k <= 100:
@@ -71,11 +66,9 @@ def search_repository(
                 matched.append(term)
         if score <= 0:
             continue
-        # Rank each line by matched-term count; use the highest-scoring line as the citation anchor.
         best_index, best_score = 0, -1
         for i, line in enumerate(lines):
-            line_terms = set(_tokens_with_identifiers(line))
-            local = len(line_terms.intersection(matched))
+            local = len(set(_tokens_with_identifiers(line)).intersection(matched))
             if local > best_score:
                 best_index, best_score = i, local
         start = max(0, best_index - context_lines)
@@ -86,4 +79,4 @@ def search_repository(
             score=round(score, 4), excerpt=excerpt,
             reason="Matched terms: " + ", ".join(sorted(matched)),
         ))
-    return sorted(hits, key=lambda h: (-h.score, h.path))[:top_k]
+    return sorted(hits, key=lambda hit: (-hit.score, hit.path))[:top_k]
