@@ -24,14 +24,12 @@ def detect_secrets(text: str) -> list[SecretFinding]:
     """Detect common credential shapes; this is a heuristic, not a guarantee."""
     findings = []
     for kind, pattern in PATTERNS:
-        for match in pattern.finditer(text):
-            findings.append(SecretFinding(kind, match.start(), match.end()))
+        findings.extend(SecretFinding(kind, match.start(), match.end()) for match in pattern.finditer(text))
     return sorted(findings, key=lambda item: item.start)
 
 
 def redact_secrets(text: str) -> str:
     """Redact detected credential-like spans without changing other text."""
-    findings = detect_secrets(text)
-    for finding in reversed(findings):
+    for finding in reversed(detect_secrets(text)):
         text = text[:finding.start] + f"[REDACTED:{finding.kind}]" + text[finding.end:]
     return text
