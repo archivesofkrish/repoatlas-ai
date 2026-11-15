@@ -8,6 +8,7 @@ from pathlib import Path
 
 from repoatlas import __version__
 from repoatlas.analyzer import analyze_repository
+from repoatlas.graph import build_graph, impact_analysis
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 
@@ -25,6 +26,12 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("path", type=Path)
     search.add_argument("query")
     search.add_argument("--top-k", type=int, default=8)
+    graph = sub.add_parser("graph", help="Build a dependency and call-reference graph")
+    graph.add_argument("path", type=Path)
+    impact = sub.add_parser("impact", help="Find files affected by changing a target file")
+    impact.add_argument("path", type=Path)
+    impact.add_argument("target")
+    impact.add_argument("--max-depth", type=int, default=5)
     ask = sub.add_parser("ask", help="Create an evidence pack for a question")
     ask.add_argument("path", type=Path)
     ask.add_argument("question")
@@ -58,6 +65,15 @@ def main(argv: list[str] | None = None) -> int:
                 print()
             if not hits:
                 print("No matching evidence found.")
+            return 0
+        if args.command == "graph":
+            result = build_graph(analyze_repository(args.path))
+            print(json.dumps(result, indent=2))
+            return 0
+        if args.command == "impact":
+            graph_data = build_graph(analyze_repository(args.path))
+            result = impact_analysis(graph_data, args.target, max_depth=args.max_depth)
+            print(json.dumps(result, indent=2))
             return 0
         if args.command == "ask":
             print(json.dumps(answer_question(args.path, args.question, top_k=args.top_k), indent=2))
