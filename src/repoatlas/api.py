@@ -16,10 +16,11 @@ from repoatlas.graph import build_graph, impact_analysis
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
+from repoatlas.llm import ProviderError, generate_grounded_answer
 
 app = FastAPI(
     title="RepoAtlas AI",
-    version="0.4.0",
+    version="0.5.0",
     description="Read-only repository intelligence with lexical and graph-aware evidence retrieval",
 )
 ALLOWED_ROOT = Path(os.environ.get("REPOATLAS_ROOT", ".")).resolve()
@@ -152,6 +153,24 @@ def ask(payload: AskRequest) -> dict:
             payload.question,
             top_k=payload.top_k,
         )
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/answer")
+def answer_endpoint(payload: AskRequest) -> dict:
+    try:
+        return generate_grounded_answer(
+            resolve_project_path(payload.path),
+            payload.question,
+            top_k=payload.top_k,
+        )
+    except ProviderError as exc:
+        status_code = 503 if (
+            "No model provider is configured" in str(exc)
+            or "Install the optional model dependency" in str(exc)
+        ) else 502
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

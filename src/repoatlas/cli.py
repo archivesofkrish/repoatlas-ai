@@ -12,6 +12,7 @@ from repoatlas.graph import build_graph, impact_analysis
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
+from repoatlas.llm import ProviderError, generate_grounded_answer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,6 +47,13 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("path", type=Path)
     ask.add_argument("question")
     ask.add_argument("--top-k", type=int, default=6)
+    answer = sub.add_parser(
+        "answer",
+        help="Generate an optional provider-backed answer from validated repository evidence",
+    )
+    answer.add_argument("path", type=Path)
+    answer.add_argument("question")
+    answer.add_argument("--top-k", type=int, default=6)
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,7 +112,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "ask":
             print(json.dumps(answer_question(args.path, args.question, top_k=args.top_k), indent=2))
             return 0
-    except (OSError, ValueError) as exc:
+        if args.command == "answer":
+            print(json.dumps(
+                generate_grounded_answer(args.path, args.question, top_k=args.top_k),
+                indent=2,
+            ))
+            return 0
+    except (OSError, ValueError, ProviderError) as exc:
         print(f"repoatlas: error: {exc}", file=sys.stderr)
         return 2
     return 1
