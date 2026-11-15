@@ -66,10 +66,15 @@ def build_parser() -> argparse.ArgumentParser:
     impact.add_argument("--max-depth", type=int, default=5)
     review = sub.add_parser("review", help="Create an interactive Git change-impact review")
     review.add_argument("path", type=Path)
-    review.add_argument("--base-ref", default="main", help="Branch, tag, or commit to compare against")
+    review.add_argument(
+        "--base-ref", default="main", help="Branch, tag, or commit to compare against"
+    )
     review.add_argument("--max-depth", type=int, default=5)
     review.add_argument("--json", action="store_true", help="Print machine-readable JSON")
-    review.add_argument("--output", type=Path, help="HTML output path (default: PATH/repoatlas-review.html)")
+    review.add_argument(
+        "--output", type=Path,
+        help="HTML output path (default: PATH/repoatlas-review.html)",
+    )
     ask = sub.add_parser("ask", help="Create an evidence pack for a question")
     ask.add_argument("path", type=Path)
     ask.add_argument("question")
@@ -167,7 +172,11 @@ def main(argv: list[str] | None = None) -> int:
                 written = render_change_review_html(result, destination)
                 stats = result["stats"]
                 print(f"Change-review dashboard written to: {written}")
-                print(f"Changed files: {stats['changed_files']} | Potential dependants: {stats['affected_files']} | High-attention changes: {stats['high_attention_changes']}")
+                print(
+                    f"Changed files: {stats['changed_files']} | "
+                    f"Potential dependants: {stats['affected_files']} | "
+                    f"High-attention changes: {stats['high_attention_changes']}"
+                )
             return 0
         if args.command == "ask":
             print(json.dumps(answer_question(args.path, args.question, top_k=args.top_k), indent=2))
