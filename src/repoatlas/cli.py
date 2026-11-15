@@ -14,6 +14,7 @@ from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
 from repoatlas.architecture import build_architecture_report, render_architecture_html
+from repoatlas.review import review_changes, render_change_review_html
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     impact.add_argument("path", type=Path)
     impact.add_argument("target")
     impact.add_argument("--max-depth", type=int, default=5)
+    review = sub.add_parser("review", help="Create an interactive Git change-impact review")
+    review.add_argument("path", type=Path)
+    review.add_argument("--base-ref", default="main", help="Branch, tag, or commit to compare against")
+    review.add_argument("--max-depth", type=int, default=5)
+    review.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    review.add_argument("--output", type=Path, help="HTML output path (default: PATH/repoatlas-review.html)")
     ask = sub.add_parser("ask", help="Create an evidence pack for a question")
     ask.add_argument("path", type=Path)
     ask.add_argument("question")
@@ -148,6 +155,19 @@ def main(argv: list[str] | None = None) -> int:
             graph_data = build_graph(analyze_repository(args.path))
             result = impact_analysis(graph_data, args.target, max_depth=args.max_depth)
             print(json.dumps(result, indent=2))
+            return 0
+        if args.command == "review":
+            result = review_changes(args.path, base_ref=args.base_ref, max_depth=args.max_depth)
+            if args.json:
+                if args.output is not None:
+                    raise ValueError("--output cannot be combined with --json")
+                print(json.dumps(result, indent=2))
+            else:
+                destination = args.output or (args.path / "repoatlas-review.html")
+                written = render_change_review_html(result, destination)
+                stats = result["stats"]
+                print(f"Change-review dashboard written to: {written}")
+                print(f"Changed files: {stats['changed_files']} | Potential dependants: {stats['affected_files']} | High-attention changes: {stats['high_attention_changes']}")
             return 0
         if args.command == "ask":
             print(json.dumps(answer_question(args.path, args.question, top_k=args.top_k), indent=2))

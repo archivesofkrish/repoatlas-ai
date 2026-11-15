@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 - 2026-11-15
+
+- Add a change-review workbench comparing the current working tree with a selected Git base reference.
+- Trace changed source files to direct and transitive dependants through resolved static import edges.
+- Render a responsive, self-contained offline HTML dashboard with filtering, impact map, module inspector and JSON export.
+- Expose the review operation through the CLI and document working-tree scope and analysis limitations.
+
+
 ## 0.6.0 - 2026-11-15
 
 - Add architecture intelligence for file-level dependency hotspots, package boundaries, isolated files, and strongly connected import cycles.
