@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 - 2026-11-16
+
+- Add declarative architecture guardrails for allowed/forbidden package dependencies, cross-package import caps and dependency-cycle policy.
+- Add evidence-backed findings with representative source-file import edges.
+- Add `repoatlas guard` CLI, `POST /v1/architecture/guardrails` API endpoint and self-contained offline HTML policy report.
+- Bound policy-file loading, validate schema strictly, and add policy, CLI, API and HTML-safety regression tests.
+- Document rule examples, static-analysis limitations and the distinction between policy compliance and runtime architectural correctness.
+
 ## 0.8.0 - 2026-11-15
 
 - Add package-level incoming and outgoing dependency metrics, including cross-package import volume and cycle concentration.

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "name": "Layered application",
+  "description": "Keep the interface thin and prevent inward layers from reaching into infrastructure.",
+  "allowed_package_dependencies": {
+    "api": ["application", "domain"],
+    "application": ["domain", "shared"],
+    "domain": ["shared"]
+  },
+  "forbidden_package_dependencies": [
+    {"source": "api", "target": "infrastructure", "reason": "Use application services instead."}
+  ],
+  "max_cross_package_imports": {"api": 40},
+  "fail_on_cycles": true
+}
