@@ -1,5 +1,6 @@
 """Command-line interface for RepoAtlas AI."""
 from __future__ import annotations
+
 import argparse
 import json
 import sys
