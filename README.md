@@ -6,24 +6,29 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-RepoAtlas AI is an evidence-grounded codebase intelligence tool. It scans a repository without executing its code, extracts Python symbols and imports, searches source files, and produces line-addressable evidence packs for engineering questions.
+RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.1.0` — working read-only foundation. Retrieval is deterministic and lexical; the project does not yet call an LLM or claim semantic understanding.
+**Current release:** `0.2.0` — multi-language static analysis, graph construction, impact analysis, evidence search, CLI, and local API. The current answering workflow is retrieval-first; it does not yet generate conclusions with an LLM.
 
 ## Why RepoAtlas?
 
-Reading an unfamiliar repository is slow. Exact text search helps find names, but it does not explain what is connected, where an implementation lives, or which source lines support an answer. RepoAtlas combines bounded repository discovery, static structure extraction, and evidence-first retrieval so developers can investigate code with a trail they can verify.
+Understanding a large or unfamiliar repository is expensive. Search can find text but not reliably explain module relationships. A language model can produce fluent explanations but may miss files, mix revisions, or invent implementation details. RepoAtlas combines deterministic code analysis and source evidence so developers can answer questions and investigate changes with a verification trail.
 
-## Features in this release
+## Features
 
-- **Safe repository scanning:** bounded file count and byte limits; skips generated directories, symlinks, unsupported formats, binary files, and common secret-bearing filenames.
-- **Python structure extraction:** discovers classes, functions, nested definitions, docstrings, and imports using `ast` without importing project modules.
-- **Revision awareness:** records the Git commit SHA when analysing a Git checkout.
-- **Evidence search:** deterministic lexical ranking returns source excerpts with file paths and line ranges.
-- **Question evidence packs:** packages relevant excerpts, scores, reasons, commit provenance, and explicit limitations. No ungrounded LLM narrative is generated.
-- **Credential hygiene:** redacts several common secret patterns from evidence excerpts. This is a defence-in-depth heuristic, not a secret scanner guarantee.
-- **CLI and optional API:** use locally from the terminal or expose a small FastAPI service restricted to a configured repository root.
-- **Automated tests and CI:** unit tests cover scanning, AST extraction, retrieval, citation validation, redaction, and CLI behaviour; GitHub Actions targets Python 3.11–3.13.
+| Capability | Implemented behaviour |
+|---|---|
+| Bounded repository scanner | Reads regular UTF-8 text files under file-count and byte limits; excludes generated folders, sensitive filenames, symlinks, and binary content |
+| Python analysis | Uses the standard-library AST to extract classes, functions, nested definitions, imports, calls, and docstrings without importing project modules |
+| Multi-language analysis | Optional Tree-sitter adapters for JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, and C# |
+| Dependency graph | Builds file import edges and best-effort symbol call-reference edges with source line provenance |
+| Change-impact analysis | Traverses reverse, statically resolved import relationships to find likely dependent files |
+| Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
+| Evidence packs | Returns file path, line range, commit SHA, excerpt, match reason, and explicit retrieval limitations |
+| Credential hygiene | Excludes common sensitive filenames and redacts several common token patterns in returned excerpts |
+| Interfaces | CLI and optional FastAPI service with scan, search, ask, graph, and impact endpoints |
+
+The multi-language parser is an optional capability. Install and cache grammars explicitly; repository scans do not download parser code or execute project code.
 
 ## Quick start
 
@@ -36,143 +41,179 @@ cd repoatlas-ai
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\\Scripts\\activate
 python -m pip install --upgrade pip
-pip install -e '.[dev]'
-
-repoatlas scan .
-repoatlas search . "authentication token validation" --top-k 8
-repoatlas ask . "Where are repository files scanned?"
+pip install -e '.[dev,api]'
 ```
 
-No API key, external service, database, or network access is required for the core CLI.
+Download the grammars you plan to analyse. This is an explicit setup action:
 
-## Commands
+```bash
+python -c "from tree_sitter_language_pack import download; download(['javascript', 'go', 'rust', 'java'])"
+```
 
-### Scan a repository
+Then analyse any repository:
+
+```bash
+repoatlas scan /path/to/repository
+repoatlas search /path/to/repository "authentication token validation" --top-k 8
+repoatlas ask /path/to/repository "Where is authentication implemented?"
+repoatlas graph /path/to/repository
+repoatlas impact /path/to/repository src/core/auth.py
+```
+
+The core scanner and Python AST analyser use the Python standard library. Tree-sitter grammars are downloaded only by the explicit command above (or an equivalent operator-managed setup step).
+
+## CLI reference
+
+### Scan
 
 ```bash
 repoatlas scan PATH
 repoatlas scan PATH --json
 ```
 
-Prints file inventory, Python symbols, imports, warnings, excluded-file counts, aggregate sizes, and Git revision metadata.
+Produces a file inventory, symbol list, import and call references, excluded-file counts, warnings, and Git revision.
 
-### Search source evidence
+### Search
 
 ```bash
 repoatlas search PATH "query terms" --top-k 8
 ```
 
-Returns ranked, line-addressable snippets. Ranking uses term frequency and inverse document frequency (a lightweight BM25-inspired score); it is not embedding-based semantic retrieval. Identifier splitting allows a query such as `create user` to match `create_user`. The citation points to the best-matching source line; surrounding context is included in the excerpt.
+Returns ranked source excerpts with exact file paths and best-matching line numbers. Identifier splitting allows a query such as `create user` to match `create_user`. Ranking is deterministic lexical retrieval, not embedding-based semantic search.
 
-### Build an evidence pack
+### Ask
 
 ```bash
 repoatlas ask PATH "How does authentication work?" --top-k 6
 ```
 
-Produces JSON with a question, repository revision, evidence citations, redacted excerpts, and limitations. It is deliberately an evidence pack rather than a pretend AI answer. A future LLM layer can consume these validated evidence objects.
+Creates a JSON evidence pack. In this release, the `answer` field deliberately explains that the evidence must be reviewed; it is not generated prose from an LLM. This prevents the product from presenting retrieval as verified reasoning.
+
+### Graph
+
+```bash
+repoatlas graph PATH
+```
+
+Outputs graph nodes, import edges, call-reference edges, resolution flags, and aggregate counts. Unresolved references remain visible instead of being silently treated as confirmed internal dependencies.
+
+### Impact
+
+```bash
+repoatlas impact PATH path/to/module.py --max-depth 5
+```
+
+Traverses reverse resolved-import edges and reports direct and transitive dependants. This is a static estimate, not a guarantee of runtime blast radius.
 
 ## Optional HTTP API
 
-Install the API extra:
+Install the API extra and start the service with an explicit workspace root:
 
 ```bash
-pip install -e '.[api]'
+pip install -e '.[api,parsing]'
 REPOATLAS_ROOT=/path/to/workspace uvicorn repoatlas.api:app --host 127.0.0.1 --port 8000
 ```
-
-The service exposes these endpoints. All project paths are resolved beneath the configured root. This development API is not intended for public exposure without authentication and operational controls.
 
 | Endpoint | Purpose |
 |---|---|
 | `GET /health` | Health and read-only mode |
-| `POST /v1/scan` | Scan a project under the configured root |
+| `POST /v1/scan` | Scan a repository under the configured root |
 | `POST /v1/search` | Retrieve line-addressable evidence |
 | `POST /v1/ask` | Create a question evidence pack |
+| `POST /v1/graph` | Build dependency and call-reference graph |
+| `POST /v1/impact` | Estimate likely file impact |
 
-Example:
+Example graph request:
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/ask \\
+curl -s http://127.0.0.1:8000/v1/graph \\
   -H 'content-type: application/json' \\
-  -d '{"path":".","question":"Where is scanning implemented?","top_k":5}'
+  -d '{"path":"my-project"}'
 ```
 
-**Deployment note:** before exposing the service to a network, add authentication, authorization, rate limiting, request logging controls, and a managed worker boundary. Keep it bound to localhost unless the deployment is secured.
+The API confines requested paths to `REPOATLAS_ROOT`. It is a local development interface, not a production multi-tenant service. Add authentication, authorization, rate limits, worker isolation, and operational controls before network exposure.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    A[Local repository] --> B[Bounded scanner]
+    A[Repository snapshot] --> B[Bounded scanner]
     B --> C[File inventory + SHA-256]
-    B --> D[Text content]
-    D --> E[Python AST analyzer]
-    D --> F[Lexical index]
-    E --> G[Symbols + imports]
-    G --> H[Analysis report]
-    F --> I[Ranked source evidence]
-    H --> J[Question evidence pack]
-    I --> J
-    J --> K[Path + line + commit citations]
+    B --> D[UTF-8 source]
+    D --> E[Python AST]
+    D --> F[Optional Tree-sitter]
+    E --> G[Symbols + imports + calls]
+    F --> G
+    G --> H[Dependency and call graph]
+    G --> I[Lexical retrieval index]
+    H --> J[Impact analysis]
+    I --> K[Evidence pack]
+    J --> K
+    K --> L[File, line, and revision citations]
 ```
 
 ### Source layout
 
 ```text
 src/repoatlas/
-├── analyzer.py   # Git revision + Python AST analysis
-├── api.py        # Optional FastAPI endpoints and root confinement
-├── cli.py        # scan, search, ask commands
-├── models.py     # typed report, symbol, file, and hit models
-├── qa.py         # evidence-pack assembly and citation validation
-├── scanner.py    # bounded, read-only file discovery
-├── search.py     # deterministic lexical retrieval
-└── security.py   # heuristic secret detection and redaction
+├── analyzer.py   # Snapshot scan, Python AST, multi-language integration
+├── api.py        # FastAPI routes and root confinement
+├── cli.py        # scan, search, ask, graph, impact
+├── graph.py      # Dependency graph and transitive impact analysis
+├── models.py     # Typed repository and analysis models
+├── parsing.py    # Optional Tree-sitter language adapters
+├── qa.py         # Evidence-pack assembly and citation validation
+├── scanner.py    # Bounded, read-only file discovery
+├── search.py     # Deterministic lexical retrieval
+└── security.py   # Heuristic secret detection and redaction
 ```
 
-## Safety model and limitations
+## Safety model and known limitations
 
 RepoAtlas treats repository content as untrusted input.
 
-- It **does not import or execute project code** during scanning or static analysis.
+- It does **not** import or execute repository code during scanning or static analysis.
 - It does not follow directory symlinks; file symlinks are excluded.
 - Default scan limits are 20,000 files, 1 MB per file, and 100 MB total content.
 - Common generated directories and sensitive filenames such as `.env` are excluded.
-- The API resolves requested paths under `REPOATLAS_ROOT` and rejects path traversal.
-- Citations are revision-aware and can be checked against the indexed snapshot.
-- Secret detection is pattern-based and incomplete. Do not point RepoAtlas at sensitive code unless your data-handling requirements permit it.
-- Python AST analysis cannot reveal dynamic imports, runtime call paths, reflection, or behaviour that only appears during execution.
-- Other languages are currently inventoried and searchable as text, but do not yet have language-specific symbol graphs.
-- Lexical retrieval can miss relevant code expressed with different terminology. A lack of results is not proof that a behaviour is absent.
+- Tree-sitter grammar installation is explicit. A scan never downloads a grammar.
+- The API resolves paths beneath `REPOATLAS_ROOT` and rejects path traversal.
+- Secret detection is heuristic and incomplete. It cannot guarantee that every credential has been removed.
+- Language grammars expose different syntax trees. The generic adapter captures common definitions, imports, and calls but does not promise complete language-semantic understanding.
+- Import resolution is best-effort. Dynamic imports, macros, generated code, module aliases, build-system rules, dependency injection, and runtime reflection are not fully modelled.
+- Call-reference edges are name-based and marked resolved only when a unique symbol candidate exists.
+- Impact analysis follows statically resolved file imports only; it is not a complete runtime blast-radius calculation.
+- Search is lexical and can miss relevant code described using different terminology.
 
-See [SECURITY.md](SECURITY.md) for the reporting policy and [CONTRIBUTING.md](CONTRIBUTING.md) for engineering standards.
+See [SECURITY.md](SECURITY.md) for reporting guidance and [CONTRIBUTING.md](CONTRIBUTING.md) for engineering standards.
 
 ## Testing and quality
 
 ```bash
-pytest -q
 ruff check src tests
+pytest --cov=repoatlas --cov-report=term-missing
 ```
 
-Tests use temporary repositories and synthetic fixtures; no external project or credential is needed. CI runs the test and lint suite on Python 3.11, 3.12, and 3.13.
+CI runs on Python 3.11, 3.12, and 3.13. It installs the development dependencies, explicitly caches the language grammars used by parsing tests, runs Ruff, and executes the test suite with coverage reporting.
+
+The tests use temporary repositories and synthetic source fixtures; no personal or proprietary code is required.
 
 ## Roadmap
 
-| Stage | Target | Status |
+| Stage | Capability | Status |
 |---|---|---|
-| 1 | Safe scanner, Python symbols, lexical search, evidence packs, CLI, local API, tests, CI | **Implemented foundation** |
-| 2 | Tree-sitter multi-language parsing and dependency graph | Planned |
-| 3 | Hybrid lexical + vector + graph retrieval and evaluation benchmark | Planned |
-| 4 | LLM provider abstraction with claim-to-citation validation | Planned |
-| 5 | Change-impact analysis, test mapping, and guided engineering investigations | Planned |
-| 6 | Secure team workspaces, incremental indexing, and IDE/CI integrations | Planned |
+| 1 | Safe scanner, Python AST, lexical evidence packs, CLI, local API, tests, CI | Implemented |
+| 2 | Tree-sitter multi-language parsing, import/call graph, transitive impact | Implemented in current feature branch |
+| 3 | Hybrid retrieval, graph-aware ranking, benchmark corpus, retrieval evaluation | Next |
+| 4 | Optional model-provider abstraction with claim-to-citation validation | Planned |
+| 5 | Interactive architecture explorer and investigation dashboard | Planned |
+| 6 | Incremental indexing, secure workspaces, and CI/IDE integrations | Planned |
 
-The next milestone is a high-quality evaluation corpus and structural dependency graph. LLM generation comes after retrieval and citation quality can be measured.
+The product will add generative answers only after retrieval quality and citation correctness can be evaluated independently.
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please include tests, discuss security implications, and keep documentation honest about what is implemented versus planned. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and pull requests are welcome. Contributions should include tests, document limitations, and preserve the read-only default. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
