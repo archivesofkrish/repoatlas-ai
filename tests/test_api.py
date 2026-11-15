@@ -118,3 +118,14 @@ def test_api_answer_skips_provider_when_no_evidence_exists(tmp_path: Path, monke
     )
     assert response.status_code == 200
     assert response.json()["generation_status"] == "no_evidence"
+
+
+def test_hybrid_search_request_rejects_non_finite_lexical_weight():
+    from pydantic import ValidationError
+
+    import pytest
+
+    with pytest.raises(ValidationError):
+        api.HybridSearchRequest.model_validate(
+            {"path": ".", "query": "authenticate", "lexical_weight": float("nan")}
+        )
