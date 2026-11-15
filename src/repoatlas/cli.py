@@ -5,10 +5,12 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
 from repoatlas import __version__
 from repoatlas.analyzer import analyze_repository
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
