@@ -1,4 +1,4 @@
-"""Language-aware analysis for Python source using the standard-library AST."""
+"""Revision-aware repository analysis using Python AST and optional Tree-sitter grammars."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 from repoatlas.models import AnalysisReport, Symbol
+from repoatlas.parsing import EXTENSION_GRAMMARS, parse_tree_sitter_file
 from repoatlas.scanner import scan_files
 
 
@@ -33,10 +34,39 @@ class _PythonVisitor(ast.NodeVisitor):
         self.scope: list[str] = []
         self.symbols: list[Symbol] = []
         self.imports: list[str] = []
+        self.import_details: list[dict[str, object]] = []
+        self.calls: list[dict[str, object]] = []
 
     def _visit_definition(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, kind: str
     ):
+        # These expressions execute in the enclosing scope, not in the definition.
+        for decorator in node.decorator_list:
+            if isinstance(decorator, ast.Name):
+                self.calls.append({
+                    "source": ".".join(self.scope) or self.path,
+                    "target": decorator.id,
+                    "line": decorator.lineno,
+                })
+            elif isinstance(decorator, ast.Attribute):
+                self.calls.append({
+                    "source": ".".join(self.scope) or self.path,
+                    "target": decorator.attr,
+                    "line": decorator.lineno,
+                })
+                self.visit(decorator)
+            else:
+                self.visit(decorator)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.visit(node.args)
+            if node.returns is not None:
+                self.visit(node.returns)
+        else:
+            for base in node.bases:
+                self.visit(base)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+
         self.scope.append(node.name)
         self.symbols.append(Symbol(
             name=node.name, qualified_name=".".join(self.scope), kind=kind, path=self.path,
@@ -56,11 +86,39 @@ class _PythonVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef):
         self._visit_definition(node, "class")
 
+    def visit_Call(self, node: ast.Call):
+        function = node.func
+        if isinstance(function, ast.Name):
+            target = function.id
+        elif isinstance(function, ast.Attribute):
+            target = function.attr
+        else:
+            target = None
+        if target:
+            self.calls.append({
+                "source": ".".join(self.scope) or self.path,
+                "target": target,
+                "line": node.lineno,
+            })
+        self.generic_visit(node)
+
     def visit_Import(self, node: ast.Import):
-        self.imports.extend(alias.name for alias in node.names)
+        for alias in node.names:
+            self.imports.append(alias.name)
+            self.import_details.append({
+                "target": alias.name,
+                "line": node.lineno,
+                "names": [],
+            })
 
     def visit_ImportFrom(self, node: ast.ImportFrom):
-        self.imports.append("." * node.level + (node.module or ""))
+        target = "." * node.level + (node.module or "")
+        self.imports.append(target)
+        self.import_details.append({
+            "target": target,
+            "line": node.lineno,
+            "names": [alias.name for alias in node.names],
+        })
 
 
 def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
@@ -73,15 +131,35 @@ def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
     report.files = files
 
     for item in files:
-        if item.language != "Python":
-            continue
         try:
-            tree = ast.parse((base / item.path).read_text(encoding="utf-8"), filename=item.path)
-        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
-            report.warnings.append(f"Could not parse {item.path}: {type(exc).__name__}")
+            source = (base / item.path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            report.warnings.append(f"Could not read {item.path}: {type(exc).__name__}")
             continue
-        visitor = _PythonVisitor(item.path)
-        visitor.visit(tree)
-        report.symbols.extend(visitor.symbols)
-        report.imports[item.path] = sorted(set(visitor.imports))
+        if item.language == "Python":
+            try:
+                tree = ast.parse(source, filename=item.path)
+            except (SyntaxError, RecursionError) as exc:
+                report.warnings.append(f"Could not parse {item.path}: {type(exc).__name__}")
+                continue
+            visitor = _PythonVisitor(item.path)
+            try:
+                visitor.visit(tree)
+            except RecursionError:
+                report.warnings.append(
+                    f"Could not safely traverse {item.path}: " 
+                    "AST nesting exceeded the recursion limit."
+                )
+                continue
+            report.symbols.extend(visitor.symbols)
+            report.imports[item.path] = sorted(set(visitor.imports))
+            report.import_details[item.path] = visitor.import_details
+            report.calls[item.path] = visitor.calls
+        elif Path(item.path).suffix.lower() in EXTENSION_GRAMMARS:
+            parsed = parse_tree_sitter_file(item.path, source)
+            report.symbols.extend(parsed["symbols"])
+            report.imports[item.path] = parsed["imports"]
+            report.calls[item.path] = parsed["calls"]
+            if parsed["warning"]:
+                report.warnings.append(parsed["warning"])
     return report

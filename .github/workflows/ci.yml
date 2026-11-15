@@ -17,16 +17,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install package and test dependencies
         run: python -m pip install --upgrade pip && pip install -e '.[dev]'
+      - name: Validate and cache Tree-sitter grammars
+        run: |
+          python - <<'PY'
+          from repoatlas.parsing import supported_grammar_names
+          from tree_sitter_language_pack import download, manifest_languages
+
+          requested = set(supported_grammar_names())
+          available = set(manifest_languages())
+          missing = sorted(requested - available)
+          if missing:
+              raise SystemExit(f"Unsupported Tree-sitter grammars: {missing}")
+          download(sorted(requested))
+          PY
       - name: Lint
         run: ruff check src tests
       - name: Test
-        run: pytest --cov=repoatlas --cov-report=term-missing
+        run: pytest --cov=repoatlas --cov-report=term-missing --cov-fail-under=80

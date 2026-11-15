@@ -19,7 +19,7 @@ class RepositoryFile:
 
 @dataclass(frozen=True, slots=True)
 class Symbol:
-    """A declaration discovered with Python's AST parser."""
+    """A declaration extracted by a language-specific static parser."""
     name: str
     qualified_name: str
     kind: str
@@ -47,7 +47,9 @@ class AnalysisReport:
     revision: str | None
     files: list[RepositoryFile] = field(default_factory=list)
     symbols: list[Symbol] = field(default_factory=list)
-    imports: dict[str, list[str]] = field(default_factory=dict)
+    imports: dict[str, list[object]] = field(default_factory=dict)
+    import_details: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    calls: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     excluded: dict[str, int] = field(default_factory=dict)
 
@@ -58,6 +60,8 @@ class AnalysisReport:
             "files": [asdict(item) for item in self.files],
             "symbols": [asdict(item) for item in self.symbols],
             "imports": self.imports,
+            "import_details": self.import_details,
+            "calls": self.calls,
             "warnings": self.warnings,
             "excluded": self.excluded,
             "stats": {

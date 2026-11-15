@@ -6,8 +6,12 @@ from repoatlas import api
 
 
 def test_api_health_search_and_path_confinement(tmp_path: Path, monkeypatch):
-    app_source = "def authenticate(token):\n    return bool(token)\n"
-    (tmp_path / "app.py").write_text(app_source, encoding="utf-8")
+    (tmp_path / "core.py").write_text(
+        "def authenticate(token):\n    return bool(token)\n", encoding="utf-8"
+    )
+    (tmp_path / "app.py").write_text(
+        "from core import authenticate\n", encoding="utf-8"
+    )
     monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
     client = TestClient(api.app)
 
@@ -15,5 +19,13 @@ def test_api_health_search_and_path_confinement(tmp_path: Path, monkeypatch):
     response = client.post("/v1/search", json={"path": ".", "query": "authenticate token"})
     assert response.status_code == 200
     assert response.json()["results"]
+    graph_response = client.post("/v1/graph", json={"path": "."})
+    assert graph_response.status_code == 200
+    assert graph_response.json()["stats"]["imports"] >= 1
+    impact_response = client.post(
+        "/v1/impact", json={"path": ".", "target": "core.py"}
+    )
+    assert impact_response.status_code == 200
+    assert impact_response.json()["affected"][0]["path"] == "app.py"
     assert client.post("/v1/scan", json={"path": "../"}).status_code == 400
     assert client.post("/v1/scan", json={"path": "does-not-exist"}).status_code == 400
