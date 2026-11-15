@@ -60,8 +60,8 @@ def test_cli_answer_reports_missing_provider(tmp_path: Path, capsys, monkeypatch
 
 
 def test_cli_architecture_writes_self_contained_explorer(tmp_path: Path, capsys):
-    (tmp_path / "core.py").write_text("def authenticate():\\n    return True\\n", encoding="utf-8")
-    (tmp_path / "api.py").write_text("import core\\n", encoding="utf-8")
+    (tmp_path / "core.py").write_text("def authenticate():\n    return True\n", encoding="utf-8")
+    (tmp_path / "api.py").write_text("import core\n", encoding="utf-8")
     output = tmp_path / "artifacts" / "architecture.html"
 
     assert main(["architecture", str(tmp_path), "--output", str(output)]) == 0
@@ -72,7 +72,7 @@ def test_cli_architecture_writes_self_contained_explorer(tmp_path: Path, capsys)
 
 
 def test_cli_architecture_json_mode(tmp_path: Path, capsys):
-    (tmp_path / "module.py").write_text("VALUE = 1\\n", encoding="utf-8")
+    (tmp_path / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     assert main(["architecture", str(tmp_path), "--json"]) == 0
 
