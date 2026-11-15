@@ -7,6 +7,7 @@ try:
     from pydantic import BaseModel, Field
 except ImportError as exc:
     raise RuntimeError("Install the API extra: pip install -e '.[api]'") from exc
+
 from repoatlas.analyzer import analyze_repository
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
