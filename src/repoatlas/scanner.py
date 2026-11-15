@@ -200,7 +200,7 @@ def create_snapshot(
         snapshot_id=fingerprint.hexdigest(),
         revision=revision,
         documents=tuple(documents),
-        excluded=excluded,
+        excluded=tuple(sorted(excluded.items())),
         warnings=tuple(warnings),
     )
 

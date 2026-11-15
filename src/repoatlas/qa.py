@@ -6,7 +6,6 @@ import hashlib
 import hmac
 from pathlib import Path
 
-from repoatlas.analyzer import analyze_snapshot
 from repoatlas.scanner import create_snapshot
 from repoatlas.search import search_snapshot
 from repoatlas.security import redact_secrets
@@ -15,7 +14,6 @@ from repoatlas.security import redact_secrets
 def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
     """Build an evidence pack from one source snapshot."""
     snapshot = create_snapshot(root)
-    report = analyze_snapshot(snapshot)
     expanded_question = question + " " + " ".join(
         token.removesuffix("s") for token in question.lower().split() if len(token) > 3
     )
@@ -27,7 +25,7 @@ def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
                 "path": hit.path,
                 "start_line": hit.start_line,
                 "end_line": hit.end_line,
-                "revision": report.revision,
+                "revision": snapshot.revision,
                 "snapshot_id": snapshot.snapshot_id,
                 "sha256": hit.sha256,
             },
@@ -38,7 +36,7 @@ def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
     return {
         "question": question,
         "repository": str(Path(snapshot.root)),
-        "revision": report.revision,
+        "revision": snapshot.revision,
         "snapshot_id": snapshot.snapshot_id,
         "answer": (
             "The following repository evidence is relevant to your question. "

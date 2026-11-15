@@ -44,6 +44,8 @@ def test_snapshot_is_content_addressed_and_retains_captured_text(tmp_path: Path)
 
     snapshot = create_snapshot(tmp_path)
     assert len(snapshot.documents) == 1
+    assert isinstance(snapshot.excluded, tuple)
+    assert isinstance(snapshot.warnings, tuple)
     document = snapshot.documents[0]
     assert document.metadata.path == "module.py"
     assert document.content == original

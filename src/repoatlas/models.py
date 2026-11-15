@@ -31,7 +31,7 @@ class RepositorySnapshot:
     snapshot_id: str
     revision: str | None
     documents: tuple[SourceDocument, ...]
-    excluded: dict[str, int]
+    excluded: tuple[tuple[str, int], ...]
     warnings: tuple[str, ...]
 
 
