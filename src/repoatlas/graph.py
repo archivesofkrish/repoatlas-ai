@@ -132,6 +132,7 @@ def impact_analysis(graph: dict, target_path: str, *, max_depth: int = 5) -> dic
         "stats": {"affected_files": len(affected), "max_depth": max_depth},
         "limitations": [
             "Impact follows statically resolved file import edges only.",
-            "Dynamic imports, runtime dependency injection, reflection, and generated code are not modelled.",
+            "Dynamic imports, runtime dependency injection, reflection, "
+            "and generated code are not modelled.",
         ],
     }
