@@ -102,7 +102,12 @@ def scan_files(
             rel = normalized_relative_path(base, path)
             lower_name = filename.lower()
             suffix = path.suffix.lower()
-            if lower_name in SENSITIVE_NAMES or lower_name == ".env" or lower_name.startswith(".env."):
+            is_sensitive = (
+                lower_name in SENSITIVE_NAMES
+                or lower_name == ".env"
+                or lower_name.startswith(".env.")
+            )
+            if is_sensitive:
                 excluded["sensitive"] += 1
                 continue
             language = TEXT_NAMES.get(lower_name) or TEXT_EXTENSIONS.get(suffix)
@@ -121,7 +126,10 @@ def scan_files(
                 excluded["oversized"] += 1
                 continue
             if total_bytes + size > max_total_bytes:
-                warnings.append(f"Total byte limit reached; remaining files were not scanned (at {rel}).")
+                warnings.append(
+                    "Total byte limit reached; remaining files were not scanned "
+                    f"(at {rel})."
+                )
                 return files, excluded, warnings
             result = _safe_text(path, max_file_bytes)
             if result is None:
