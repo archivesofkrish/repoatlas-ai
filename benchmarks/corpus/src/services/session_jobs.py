@@ -3,5 +3,5 @@
 from api.handlers import dispatch
 
 
-def refresh(job):
+def execute(job):
     return dispatch(job.request)
