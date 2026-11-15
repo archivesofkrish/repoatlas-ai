@@ -48,3 +48,8 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# This module intentionally embeds minified HTML/CSS/JavaScript in one offline artifact.
+"src/repoatlas/architecture.py" = ["E501"]
+
