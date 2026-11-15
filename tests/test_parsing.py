@@ -14,10 +14,10 @@ def test_javascript_symbols_imports_and_calls_when_grammar_cached():
     )
     if result["warning"] and "not installed" in result["warning"]:
         return
-    assert any(symbol.name == "App" for symbol in result["symbols"])
-    assert any(symbol.name == "start" for symbol in result["symbols"])
-    assert any(item["target"] == "./worker.js" for item in result["imports"])
-    assert any(item["target"] == "run" for item in result["calls"])
+    assert any(symbol.name == "App" for symbol in result["symbols"]), result
+    assert any(symbol.name == "start" for symbol in result["symbols"]), result
+    assert any(item["target"] == "./worker.js" for item in result["imports"]), result
+    assert any(item["target"] == "run" for item in result["calls"]), result
 
 
 def test_go_symbol_and_import_extraction_when_grammar_cached():
@@ -27,5 +27,5 @@ def test_go_symbol_and_import_extraction_when_grammar_cached():
     )
     if result["warning"] and "not installed" in result["warning"]:
         return
-    assert any(symbol.name == "main" for symbol in result["symbols"])
-    assert any("fmt" in item["target"] for item in result["imports"])
+    assert any(symbol.name == "main" for symbol in result["symbols"]), result
+    assert any("fmt" in item["target"] for item in result["imports"]), result
