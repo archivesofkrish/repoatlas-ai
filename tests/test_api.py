@@ -144,3 +144,40 @@ def test_architecture_api_returns_dependency_insights(tmp_path: Path, monkeypatc
     assert body["stats"]["files"] == 2
     assert body["stats"]["resolved_dependencies"] >= 1
     assert body["hubs"][0]["path"] in {"core.py", "api.py"}
+
+
+def test_change_review_api_reports_working_tree_impact(tmp_path: Path, monkeypatch):
+    import subprocess
+
+    (tmp_path / "core.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "service.py").write_text("import core\n", encoding="utf-8")
+
+    def git(*args):
+        subprocess.run(
+            ["git", "-C", str(tmp_path), *args], check=True, capture_output=True
+        )
+
+    git("init")
+    git("config", "user.email", "api-tests@example.invalid")
+    git("config", "user.name", "RepoAtlas API tests")
+    git("add", "-A")
+    git("commit", "-m", "baseline")
+    git("branch", "baseline")
+    (tmp_path / "core.py").write_text("VALUE = 2\n", encoding="utf-8")
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+
+    response = TestClient(api.app).post(
+        "/v1/review", json={"path": ".", "base_ref": "baseline"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["stats"]["changed_files"] == 1
+    assert response.json()["changes"][0]["affected"][0]["path"] == "service.py"
+
+
+def test_change_review_api_rejects_unsafe_base_ref(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+    response = TestClient(api.app).post(
+        "/v1/review", json={"path": ".", "base_ref": "../outside"}
+    )
+    assert response.status_code == 422

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repoatlas-ai"
-version = "0.6.0"
+version = "0.7.0"
 description = "Evidence-grounded code intelligence and interactive architecture exploration."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -52,4 +52,5 @@ select = ["E", "F", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # This module intentionally embeds minified HTML/CSS/JavaScript in one offline artifact.
 "src/repoatlas/architecture.py" = ["E501"]
+"src/repoatlas/review.py" = ["E501"]
 

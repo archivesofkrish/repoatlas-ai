@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.6.0` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, architecture metrics and an interactive offline explorer, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, and a bounded local API.
+**Current release:** `0.7.0` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, architecture metrics and an interactive offline explorer, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, and a bounded local API.
 
 ## Why RepoAtlas?
 
@@ -24,6 +24,7 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Multi-language analysis | Optional Tree-sitter adapters for JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, and C# |
 | Dependency graph | Builds file import edges and best-effort symbol call-reference edges with source line provenance |
 | Change-impact analysis | Traverses reverse, statically resolved import relationships to find likely dependent files |
+| Change review workbench | Compares a Git base reference with the working tree, traces dependants, and renders an interactive offline impact dashboard |
 | Architecture intelligence | Detects statically resolved dependency cycles, package boundaries, isolated files and high fan-in/fan-out modules |
 | Interactive architecture explorer | Generates a self-contained HTML graph with file search, package/language filters, module inspection, and pan/zoom controls |
 | Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
@@ -68,6 +69,7 @@ repoatlas ask /path/to/repository "Where is authentication implemented?"
 repoatlas answer /path/to/repository "How does authentication work?"
 repoatlas graph /path/to/repository
 repoatlas impact /path/to/repository src/core/auth.py
+repoatlas review /path/to/repository --base-ref main
 ```
 
 The core scanner and Python AST analyser use the Python standard library. Tree-sitter grammars are downloaded only by the explicit command above (or an equivalent operator-managed setup step).
@@ -137,6 +139,20 @@ repoatlas impact PATH path/to/module.py --max-depth 5
 ```
 
 Traverses reverse resolved-import edges and reports direct and transitive dependants. This is a static estimate, not a guarantee of runtime blast radius.
+
+### Change review workbench
+
+Run from a checked-out feature branch and compare it with main:
+
+    repoatlas review PATH --base-ref main
+    repoatlas review PATH --base-ref origin/main --output ./artifacts/change-review.html
+    repoatlas review PATH --base-ref main --json
+
+The review compares the base commit with the current working tree, including committed changes, staged/unstaged tracked changes, and non-ignored untracked files. It scans the current checkout, traces changed modules through resolved import dependants, and presents changed paths, attention tiers, direct/transitive dependants, graph coverage, and limitations in a self-contained dashboard. The responsive, dark-themed HTML works offline and includes path search, attention filters, a dependency map, a per-file inspector and JSON export.
+
+Attention tiers are a triage aid based on the number of statically identified dependants (High: 10+, Elevated: 4–9, Focused: 1–3, Local: 0). They are not defect probabilities. Deleted or excluded files are marked Unmapped because they are absent from the current source graph. Dynamic imports, reflection, generated code and runtime wiring are not modelled.
+
+The optional HTTP service exposes the same analysis at POST /v1/review.
 
 ### Architecture explorer
 

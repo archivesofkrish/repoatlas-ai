@@ -59,3 +59,8 @@ When changing graph resolution or architecture metrics, add tests for:
 - standalone HTML output with no CDN or external runtime dependencies.
 
 Treat dependency cycles, fan-in and structural scores as review heuristics. Do not label them as defects, runtime reachability or maintainability scores without separate evidence.
+
+
+## Change review workbench
+
+Change-review tests use temporary Git repositories and cover tracked modifications, untracked additions, deletions, transitive import dependants, invalid refs, repository-root boundaries and script-safe offline HTML output. Attention tiers are count-based triage only. The working-tree graph and deleted-file limitations must remain explicit when extending this feature.

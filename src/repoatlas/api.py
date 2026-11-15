@@ -19,10 +19,11 @@ from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
 from repoatlas.api_validation import resolve_workspace_path
 from repoatlas.architecture import build_architecture_report
+from repoatlas.review import review_changes
 
 app = FastAPI(
     title="RepoAtlas AI",
-    version="0.6.0",
+    version="0.7.0",
     description=(
         "Read-only repository intelligence with evidence retrieval "
         "and architecture analysis"
@@ -52,6 +53,11 @@ class HybridSearchRequest(SearchRequest):
 
 class ImpactRequest(RepositoryRequest):
     target: str = Field(min_length=1, max_length=500)
+    max_depth: int = Field(default=5, ge=1, le=20)
+
+
+class ReviewRequest(RepositoryRequest):
+    base_ref: str = Field(default="main", min_length=1, max_length=128)
     max_depth: int = Field(default=5, ge=1, le=20)
 
 
@@ -180,6 +186,19 @@ def impact_endpoint(payload: ImpactRequest) -> dict:
         return impact_analysis(
             build_graph(report),
             payload.target,
+            max_depth=payload.max_depth,
+        )
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/review")
+def review_endpoint(payload: ReviewRequest) -> dict:
+    """Compare the current working tree with a base ref and map likely import dependants."""
+    try:
+        return review_changes(
+            resolve_project_path(payload.path),
+            base_ref=payload.base_ref,
             max_depth=payload.max_depth,
         )
     except (OSError, ValueError) as exc:
