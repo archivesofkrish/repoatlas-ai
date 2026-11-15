@@ -45,9 +45,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create architecture metrics and a self-contained interactive dependency explorer",
     )
     architecture.add_argument("path", type=Path)
-    architecture.add_argument("--json", action="store_true", help="Print architecture metrics as JSON")
-    architecture.add_argument("--output", type=Path, help="HTML output path (default: PATH/repoatlas-architecture.html)")
-    architecture.add_argument("--max-nodes", type=int, default=180, help="Maximum modules rendered in the HTML graph (20–500)")
+    architecture.add_argument(
+        "--json", action="store_true", help="Print architecture metrics as JSON"
+    )
+    architecture.add_argument(
+        "--output",
+        type=Path,
+        help="HTML output path (default: PATH/repoatlas-architecture.html)",
+    )
+    architecture.add_argument(
+        "--max-nodes",
+        type=int,
+        default=180,
+        help="Maximum modules rendered in the HTML graph (20–500)",
+    )
     impact = sub.add_parser("impact", help="Find files affected by changing a target file")
     impact.add_argument("path", type=Path)
     impact.add_argument("target")
