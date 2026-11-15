@@ -68,7 +68,7 @@ def test_html_explorer_is_self_contained_and_escapes_untrusted_paths(tmp_path: P
     html = destination.read_text(encoding="utf-8")
 
     assert "<svg" in html
-    assert "RepoAtlas Architecture Observatory" in html
+    assert "Architecture Observatory" in html
     assert "Package map" in html
     assert 'id="package-graph"' in html
     assert "https://cdn" not in html

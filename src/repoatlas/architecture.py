@@ -258,7 +258,7 @@ def render_architecture_html(
             -int(item.get("file_count", 0)),
             str(item.get("name", "")),
         ),
-    )[:120]
+    )[:60]
     selected_package_names = {item["name"] for item in selected_packages}
     package_nodes = [
         {
@@ -481,7 +481,7 @@ function buildPackageGraph(){
    line.setAttribute("stroke-width",String(1+Math.min(3,Number(edge.edge_count||0)*.25)));
    line.setAttribute("marker-end","url(#package-arrow)");
    const title=document.createElementNS("http://www.w3.org/2000/svg","title");
-   title.textContent=edge.source+" imports from "+edge.target+" · "+edge.edge_count+" resolved edges";
+   title.textContent=edge.source+" imports "+edge.target+" · "+edge.edge_count+" resolved edges";
    line.appendChild(title);layer.appendChild(line);
  });
  packages.forEach(pkg=>{
