@@ -63,7 +63,7 @@ def test_html_explorer_is_self_contained_and_escapes_untrusted_paths(tmp_path: P
     assert "<svg" in html
     assert "RepoAtlas Architecture Explorer" in html
     assert "https://cdn" not in html
-    assert "src=\\"http" not in html
+    assert "src=" not in html
     assert html.count("</script>") == 2
     assert "&lt;/script&gt;" in html
     assert "\\u003c/script\\u003e" in html
