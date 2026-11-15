@@ -1,16 +1,11 @@
 """Evidence-first question answering without a model-provider dependency."""
-
 from __future__ import annotations
-
 from pathlib import Path
-
 from repoatlas.analyzer import analyze_repository
 from repoatlas.search import search_repository
 from repoatlas.security import redact_secrets
 
-
 def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
-    """Create a transparent evidence pack; deliberately does not hallucinate prose."""
     base = Path(root).expanduser().resolve(strict=True)
     report = analyze_repository(base)
     expanded_question = question + " " + " ".join(
@@ -42,9 +37,7 @@ def answer_question(root: str | Path, question: str, *, top_k: int = 6) -> dict:
         ],
     }
 
-
 def validate_citation(root: str | Path, citation: dict) -> bool:
-    """Validate a citation against an on-disk snapshot and safe relative path."""
     base = Path(root).resolve(strict=True)
     raw = citation.get("path", "")
     if not isinstance(raw, str) or not raw or Path(raw).is_absolute() or ".." in Path(raw).parts:
