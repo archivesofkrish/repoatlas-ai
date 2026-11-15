@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 - 2026-11-15
+
+- Add package-level incoming and outgoing dependency metrics, including cross-package import volume and cycle concentration.
+- Extend the offline Architecture Observatory with a dedicated package-topology map alongside the module dependency graph.
+- Add contextual package inspection with dependency relationships and high-importance modules.
+- Refresh the architecture interface with a cohesive visual system while preserving offline operation and safe embedded data.
+
 ## 0.7.0 - 2026-11-15
 
 - Add a change-review workbench comparing the current working tree with a selected Git base reference.

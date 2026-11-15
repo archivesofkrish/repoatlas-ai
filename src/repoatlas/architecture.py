@@ -121,18 +121,43 @@ def build_architecture_report(analysis: Any, graph: dict[str, Any]) -> dict[str,
                 pair = (package, target_package)
                 package_edges[pair] = package_edges.get(pair, 0) + 1
 
+    package_dependencies = [
+        {"source": source, "target": target, "edge_count": count}
+        for (source, target), count in sorted(package_edges.items())
+    ]
+    package_outgoing: dict[str, set[str]] = {package: set() for package in package_files}
+    package_incoming: dict[str, set[str]] = {package: set() for package in package_files}
+    package_outgoing_edges = {package: 0 for package in package_files}
+    package_incoming_edges = {package: 0 for package in package_files}
+    for dependency in package_dependencies:
+        source = dependency["source"]
+        target = dependency["target"]
+        count = dependency["edge_count"]
+        package_outgoing[source].add(target)
+        package_incoming[target].add(source)
+        package_outgoing_edges[source] += count
+        package_incoming_edges[target] += count
+    package_cycle_files = {
+        package: sum(
+            item["in_cycle"] for item in files if item["package"] == package
+        )
+        for package in package_files
+    }
     packages = [
         {
             "name": package,
             "file_count": len(package_files[package]),
             "symbol_count": package_symbols[package],
+            "dependency_count": len(package_outgoing[package]),
+            "dependant_count": len(package_incoming[package]),
+            "cross_package_imports": package_outgoing_edges[package],
+            "cross_package_dependant_imports": package_incoming_edges[package],
+            "cycle_file_count": package_cycle_files[package],
+            "dependency_packages": sorted(package_outgoing[package]),
+            "dependant_packages": sorted(package_incoming[package]),
             "files": package_files[package],
         }
         for package in sorted(package_files)
-    ]
-    package_dependencies = [
-        {"source": source, "target": target, "edge_count": count}
-        for (source, target), count in sorted(package_edges.items())
     ]
 
     hubs = sorted(
@@ -224,14 +249,58 @@ def render_architecture_html(
         for target in item.get("dependencies", [])
         if target in selected_paths
     ]
+    all_packages = list(report.get("packages", []))
+    selected_packages = sorted(
+        all_packages,
+        key=lambda item: (
+            -(int(item.get("cross_package_imports", 0))
+              + int(item.get("cross_package_dependant_imports", 0))),
+            -int(item.get("file_count", 0)),
+            str(item.get("name", "")),
+        ),
+    )[:60]
+    selected_package_names = {item["name"] for item in selected_packages}
+    package_nodes = [
+        {
+            key: item.get(key, 0)
+            for key in (
+                "name", "file_count", "symbol_count", "dependency_count",
+                "dependant_count", "cross_package_imports",
+                "cross_package_dependant_imports", "cycle_file_count",
+            )
+        } | {
+            "dependency_packages": item.get("dependency_packages", []),
+            "dependant_packages": item.get("dependant_packages", []),
+            "top_files": [
+                file["path"]
+                for file in sorted(
+                    (candidate for candidate in all_files
+                     if candidate["package"] == item["name"]),
+                    key=lambda candidate: (
+                        -int(candidate.get("structural_score", 0)),
+                        candidate["path"],
+                    ),
+                )[:8]
+            ]
+        }
+        for item in selected_packages
+    ]
+    package_map_edges = [
+        edge for edge in report.get("package_dependencies", [])
+        if edge["source"] in selected_package_names
+        and edge["target"] in selected_package_names
+    ]
     payload = {
         "repository": report.get("repository", "Repository"),
         "revision": report.get("revision"),
         "stats": report.get("stats", {}),
         "files": map_nodes,
         "edges": map_edges,
+        "packages": package_nodes,
+        "package_edges": package_map_edges,
         "cycles": report.get("cycles", []),
         "omitted_files": max(0, len(all_files) - len(selected)),
+        "omitted_packages": max(0, len(all_packages) - len(selected_packages)),
     }
     embedded = _safe_json(payload)
     repo_name = html.escape(str(report.get("repository", "Repository")), quote=True)
@@ -245,16 +314,16 @@ def render_architecture_html(
 <style>
 :root{color-scheme:dark;--bg:#0b1020;--panel:#111a2e;--panel2:#17233a;--line:#293852;--text:#e7edf7;--muted:#9aa9bf;--cyan:#63d4e8;--amber:#f6bd60;--red:#ff7485;--green:#8bd5a7}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#172642 0,#0b1020 42%);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--line);background:#0b1020dd;position:sticky;top:0;z-index:4;backdrop-filter:blur(12px)}
-.brand{font-size:17px;font-weight:750;letter-spacing:.02em}.brand span{color:var(--cyan)}.sub{font-size:12px;color:var(--muted);margin-top:2px}.meta{color:var(--muted);font-size:12px;text-align:right}
-main{display:grid;grid-template-columns:275px minmax(400px,1fr) 290px;gap:14px;padding:14px;min-height:calc(100vh - 70px)}
-.panel{background:linear-gradient(160deg,#121d32,#0f1729);border:1px solid var(--line);border-radius:13px;min-width:0;overflow:hidden}.panel-head{padding:14px 15px;border-bottom:1px solid var(--line);font-weight:700}.panel-body{padding:14px}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px clamp(16px,3vw,34px);border-bottom:1px solid #30415f;background:#0b1020d9;position:sticky;top:0;z-index:4;backdrop-filter:blur(18px)}
+.identity{display:flex;align-items:center;gap:12px}.brand-mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#63d4e8,#8b8cf7 70%,#c4a7ff);color:#07101e;font-weight:950;box-shadow:0 8px 26px #63d4e833}.brand{font-size:18px;font-weight:820;letter-spacing:-.025em}.brand span{color:var(--cyan)}.sub{font-size:12px;color:var(--muted);margin-top:2px}.meta{color:var(--muted);font-size:12px;text-align:right;line-height:1.7}
+main{display:grid;grid-template-columns:275px minmax(400px,1fr) 290px;gap:16px;padding:18px clamp(10px,2vw,22px);min-height:calc(100vh - 84px)}
+.panel{background:linear-gradient(155deg,#14213aee,#0f182bee);border:1px solid #344763;border-radius:18px;min-width:0;overflow:hidden;box-shadow:0 18px 52px #0003}.panel-head{padding:16px 17px;border-bottom:1px solid var(--line);font-weight:750;letter-spacing:-.01em}.panel-body{padding:16px}
 label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px}
 input,select{width:100%;background:#0b1426;border:1px solid #33445f;color:var(--text);border-radius:8px;padding:10px;font:inherit;outline:none}input:focus,select:focus{border-color:var(--cyan)}
-.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{padding:10px;background:#0b1426;border:1px solid #24344c;border-radius:9px}.metric strong{display:block;font-size:20px}.metric span{font-size:11px;color:var(--muted)}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{padding:12px;background:linear-gradient(145deg,#111f35,#0b1426);border:1px solid #2a3c58;border-radius:12px;box-shadow:inset 0 1px #ffffff08}.metric strong{display:block;font-size:22px;letter-spacing:-.04em}.metric span{font-size:10px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
 .list{margin-top:8px;display:grid;gap:5px;max-height:43vh;overflow:auto}.list button{width:100%;text-align:left;color:var(--text);background:#101c30;border:1px solid transparent;border-radius:7px;padding:8px;cursor:pointer;font:inherit;font-size:12px;overflow-wrap:anywhere}.list button:hover,.list button.active{border-color:var(--cyan);background:#16283e}
-.canvas-panel{display:flex;flex-direction:column;min-height:650px}.toolbar{display:flex;gap:8px;align-items:center;padding:10px 13px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px}.toolbar button{background:#17243a;border:1px solid #344763;color:var(--text);padding:6px 9px;border-radius:7px;cursor:pointer}.toolbar .spacer{flex:1}
-#graph{width:100%;height:100%;min-height:600px;touch-action:none;background:radial-gradient(circle at center,#13223a 0,#0d1729 70%)}.edge{stroke:#536985;stroke-width:1.4;opacity:.45}.node{cursor:pointer;stroke:#0b1020;stroke-width:2}.node.cycle{stroke:var(--red);stroke-width:3}.node.selected{stroke:#fff;stroke-width:3.5}.node-label{font-size:10px;fill:#cbd7e8;pointer-events:none}.detail-title{font-size:15px;font-weight:750;overflow-wrap:anywhere}.tag{display:inline-block;padding:3px 7px;border-radius:20px;background:#23344e;color:var(--cyan);font-size:11px;margin:3px 3px 3px 0}
+.canvas-panel{display:flex;flex-direction:column;min-height:650px}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px}.toolbar button{background:#17243a;border:1px solid #344763;color:var(--text);padding:7px 11px;border-radius:9px;cursor:pointer;transition:background .16s,border-color .16s,transform .16s}.toolbar button:hover{border-color:var(--cyan);transform:translateY(-1px)}.toolbar button.active{background:linear-gradient(135deg,#16516a,#30366f);border-color:#6bdbe6;color:#f5fdff;box-shadow:0 6px 18px #3ec4d522}.toolbar .spacer{flex:1}
+#graph,#package-graph{width:100%;height:100%;min-height:600px;touch-action:none;background:radial-gradient(circle at 50% 45%,#1b3152 0,#111d32 42%,#0d1729 78%)}#package-graph{display:none}.package-edge{stroke:#7186aa;stroke-width:1.8;opacity:.45}.package-node{cursor:pointer;stroke:#dbeafe55;stroke-width:1.5;filter:drop-shadow(0 7px 15px #0008)}.package-node.selected{stroke:#fff;stroke-width:3}.package-label{fill:#e8f2ff;font-size:15px;font-weight:700;text-anchor:middle;pointer-events:none}.package-sub{fill:#a8bad4;font-size:10px;text-anchor:middle;pointer-events:none}.edge{stroke:#536985;stroke-width:1.4;opacity:.45}.node{cursor:pointer;stroke:#0b1020;stroke-width:2}.node.cycle{stroke:var(--red);stroke-width:3}.node.selected{stroke:#fff;stroke-width:3.5}.node-label{font-size:10px;fill:#cbd7e8;pointer-events:none}.detail-title{font-size:15px;font-weight:750;overflow-wrap:anywhere}.tag{display:inline-block;padding:3px 7px;border-radius:20px;background:#23344e;color:var(--cyan);font-size:11px;margin:3px 3px 3px 0}
 .kv{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #24344c}.kv span{color:var(--muted)}.detail-list{font-size:12px;overflow-wrap:anywhere;color:#cad5e5}.empty{color:var(--muted);font-size:12px;padding:8px 0}.warning{border-left:3px solid var(--amber);padding:9px 10px;background:#322b1f55;color:#e7d2a5;border-radius:4px;font-size:12px}
 .legend{display:flex;flex-wrap:wrap;gap:9px;padding:10px 14px;color:var(--muted);font-size:11px;border-top:1px solid var(--line)}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
 @media(max-width:1100px){main{grid-template-columns:230px minmax(300px,1fr)}.detail-panel{grid-column:1/-1}.detail-panel .panel-body{display:grid;grid-template-columns:1fr 1fr;gap:15px}}
@@ -262,7 +331,7 @@ input,select{width:100%;background:#0b1426;border:1px solid #33445f;color:var(--
 </style>
 </head>
 <body>
-<header><div><div class="brand">RepoAtlas <span>Architecture Explorer</span></div><div class="sub">Interactive dependency map · Static analysis · No repository code executed</div></div><div class="meta">__REPOSITORY__<br>__REVISION__</div></header>
+<header><div class="identity"><div class="brand-mark">RA</div><div><div class="brand">RepoAtlas <span>Architecture Observatory</span></div><div class="sub">Explore the shape of your codebase · Static analysis · No repository code executed</div></div></div><div class="meta">__REPOSITORY__<br>Snapshot · __REVISION__</div></header>
 <main>
 <aside class="panel">
   <div class="panel-head">Repository overview</div>
@@ -275,10 +344,14 @@ input,select{width:100%;background:#0b1426;border:1px solid #33445f;color:var(--
   </div>
 </aside>
 <section class="panel canvas-panel">
-  <div class="toolbar"><span id="graph-count">Dependency graph</span><span class="spacer"></span><button id="reset">Reset view</button><button id="fit">Fit</button></div>
+  <div class="toolbar"><button id="show-modules" class="active" type="button">Module map</button><button id="show-packages" type="button">Package map</button><span id="graph-count">Dependency graph</span><span class="spacer"></span><button id="reset">Reset view</button><button id="fit">Fit</button></div>
   <svg id="graph" viewBox="0 0 1200 760" role="img" aria-label="Interactive resolved import dependency graph">
     <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#536985"/></marker></defs>
     <g id="world"><g id="edges"></g><g id="nodes"></g></g>
+  </svg>
+  <svg id="package-graph" viewBox="0 0 1200 760" role="img" aria-label="Interactive package dependency topology">
+    <defs><marker id="package-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8" fill="#8096bb"/></marker><radialGradient id="package-fill"><stop offset="0" stop-color="#344d79"/><stop offset="1" stop-color="#17243d"/></radialGradient></defs>
+    <g id="package-world"><g id="package-edges"></g><g id="package-nodes"></g></g>
   </svg>
   <div class="legend"><span><i class="dot" style="background:#63d4e8"></i>Python</span><span><i class="dot" style="background:#f6bd60"></i>JavaScript / TypeScript</span><span><i class="dot" style="background:#8bd5a7"></i>Other languages</span><span><i class="dot" style="background:#ff7485"></i>Dependency cycle</span><span>Circle size = structural importance</span></div>
 </section>
@@ -390,6 +463,100 @@ svg.addEventListener("pointerdown",event=>{if(event.target===svg||event.target.t
 svg.addEventListener("pointermove",event=>{if(pan){tx=event.clientX-pan.x;ty=event.clientY-pan.y;setView();}});
 svg.addEventListener("pointerup",()=>{pan=null;});
 svg.addEventListener("wheel",event=>{event.preventDefault();const factor=event.deltaY<0?1.08:.92;scale=Math.max(.35,Math.min(2.8,scale*factor));setView();},{passive:false});
+function buildPackageGraph(){
+ const packages=data.packages||[], edges=data.package_edges||[];
+ const layer=document.getElementById("package-edges"), nodesLayer=document.getElementById("package-nodes");
+ const coords=new Map(), nodeElements=new Map();
+ const count=packages.length, radius=Math.min(270,155+count*2.2);
+ packages.forEach((pkg,index)=>{
+   const angle=(2*Math.PI*index/Math.max(count,1))-(Math.PI/2);
+   coords.set(pkg.name,{x:600+Math.cos(angle)*radius,y:380+Math.sin(angle)*radius});
+ });
+ edges.forEach(edge=>{
+   const a=coords.get(edge.source),b=coords.get(edge.target);if(!a||!b)return;
+   const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+   line.classList.add("package-edge");
+   line.setAttribute("x1",a.x);line.setAttribute("y1",a.y);
+   line.setAttribute("x2",b.x);line.setAttribute("y2",b.y);
+   line.setAttribute("stroke-width",String(1+Math.min(3,Number(edge.edge_count||0)*.25)));
+   line.setAttribute("marker-end","url(#package-arrow)");
+   const title=document.createElementNS("http://www.w3.org/2000/svg","title");
+   title.textContent=edge.source+" imports "+edge.target+" · "+edge.edge_count+" resolved edges";
+   line.appendChild(title);layer.appendChild(line);
+ });
+ packages.forEach(pkg=>{
+   const p=coords.get(pkg.name),g=document.createElementNS("http://www.w3.org/2000/svg","g");
+   const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
+   circle.classList.add("package-node");
+   const r=21+Math.min(21,Math.sqrt(Number(pkg.file_count||0))*3);
+   circle.setAttribute("r",r);circle.setAttribute("cx",p.x);circle.setAttribute("cy",p.y);
+   circle.setAttribute("fill","url(#package-fill)");
+   const title=document.createElementNS("http://www.w3.org/2000/svg","title");
+   title.textContent=pkg.name+" · "+pkg.file_count+" files · "+pkg.dependency_count+" package dependencies";
+   circle.appendChild(title);circle.addEventListener("click",()=>showPackageDetails(pkg.name));
+   const label=document.createElementNS("http://www.w3.org/2000/svg","text");
+   label.classList.add("package-label");label.setAttribute("x",p.x);label.setAttribute("y",p.y+r+20);
+   label.textContent=pkg.name.length>22?pkg.name.slice(0,20)+"…":pkg.name;
+   const sub=document.createElementNS("http://www.w3.org/2000/svg","text");
+   sub.classList.add("package-sub");sub.setAttribute("x",p.x);sub.setAttribute("y",p.y+r+36);
+   sub.textContent=fmt(pkg.file_count)+" files";
+   g.append(circle,label,sub);nodesLayer.appendChild(g);nodeElements.set(pkg.name,circle);
+ });
+ window.repoatlasSelectPackage=name=>{
+   for(const [key,node] of nodeElements)node.classList.toggle("selected",key===name);
+ };
+ if(data.omitted_packages){
+   const note=document.createElement("div");note.className="warning";
+   note.textContent=fmt(data.omitted_packages)+" lower-importance packages omitted from this visual map; full metrics remain in the JSON report.";
+   document.getElementById("graph-count").after(note);
+ }
+}
+function showPackageDetails(name){
+ const pkg=(data.packages||[]).find(item=>item.name===name);if(!pkg)return;
+ document.getElementById("detail").replaceChildren();
+ const box=document.createElement("div");
+ const title=document.createElement("div");title.className="detail-title";title.textContent=pkg.name;box.appendChild(title);
+ const tag=document.createElement("span");tag.className="tag";tag.textContent="Package boundary";box.appendChild(tag);
+ for(const [label,value] of [
+   ["Files",fmt(pkg.file_count)],["Symbols",fmt(pkg.symbol_count)],
+   ["Depends on",fmt(pkg.dependency_count)],["Depended on by",fmt(pkg.dependant_count)],
+   ["Outgoing cross-package imports",fmt(pkg.cross_package_imports)],
+   ["Incoming cross-package imports",fmt(pkg.cross_package_dependant_imports)],
+   ["Files in detected cycles",fmt(pkg.cycle_file_count)],
+ ]){
+   const row=document.createElement("div");row.className="kv";
+   const a=document.createElement("span");a.textContent=label;
+   const b=document.createElement("strong");b.textContent=value;row.append(a,b);box.appendChild(row);
+ }
+ for(const [label,items] of [
+   ["Depends on",pkg.dependency_packages||[]],
+   ["Depended on by",pkg.dependant_packages||[]],
+   ["Highest-importance modules",pkg.top_files||[]],
+ ]){
+   const heading=document.createElement("label");heading.textContent=label;box.appendChild(heading);
+   const list=document.createElement("div");list.className="detail-list";
+   list.textContent=items.length?items.join("\n"):"None detected";box.appendChild(list);
+ }
+ document.getElementById("detail").appendChild(box);
+ if(window.repoatlasSelectPackage)window.repoatlasSelectPackage(name);
+}
+function setMode(mode){
+ const modules=mode==="modules";
+ document.getElementById("graph").style.display=modules?"block":"none";
+ document.getElementById("package-graph").style.display=modules?"none":"block";
+ document.getElementById("show-modules").classList.toggle("active",modules);
+ document.getElementById("show-packages").classList.toggle("active",!modules);
+ if(!modules&&data.packages&&data.packages.length){
+   document.getElementById("graph-count").textContent=data.packages.length+" packages · "+data.package_edges.length+" cross-package links";
+   showPackageDetails(data.packages[0].name);
+ }else if(modules){
+   document.getElementById("graph-count").textContent=data.files.length+" modules · "+data.edges.length+" resolved import edges";
+   if(selected)showDetails(selected);
+ }
+}
+document.getElementById("show-modules").addEventListener("click",()=>setMode("modules"));
+document.getElementById("show-packages").addEventListener("click",()=>setMode("packages"));
+buildPackageGraph();
 populateFilters();buildGraph();
 if(data.files.length)showDetails(data.files[0].path);
 })();
