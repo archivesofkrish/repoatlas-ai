@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.7.0` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, architecture metrics and an interactive offline explorer, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, and a bounded local API.
+**Current release:** `0.8.0` — content-addressed source snapshots, multi-language static analysis, file- and package-level dependency topology, change-impact review, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, and a bounded local API.
 
 ## Why RepoAtlas?
 
@@ -25,8 +25,8 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Dependency graph | Builds file import edges and best-effort symbol call-reference edges with source line provenance |
 | Change-impact analysis | Traverses reverse, statically resolved import relationships to find likely dependent files |
 | Change review workbench | Compares a Git base reference with the working tree, traces dependants, and renders an interactive offline impact dashboard |
-| Architecture intelligence | Detects statically resolved dependency cycles, package boundaries, isolated files and high fan-in/fan-out modules |
-| Interactive architecture explorer | Generates a self-contained HTML graph with file search, package/language filters, module inspection, and pan/zoom controls |
+| Architecture intelligence | Detects statically resolved dependency cycles, package boundaries, isolated files and high fan-in/fan-out modules; quantifies cross-package coupling and cycle concentration |
+| Interactive architecture observatory | Switches between a module dependency map and a package topology map, with contextual package metrics and module inspection in self-contained offline HTML |
 | Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
 | Hybrid retrieval | Expands lexical matches through resolved import relationships, with explicit graph provenance and bounded depth |
 | Evidence packs | Returns file path, line range, commit SHA, content hash, snapshot fingerprint, excerpt, match reason, and explicit retrieval limitations |

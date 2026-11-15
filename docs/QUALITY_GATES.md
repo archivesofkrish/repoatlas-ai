@@ -54,7 +54,8 @@ The local API validates request shape and numeric bounds before analysis begins.
 When changing graph resolution or architecture metrics, add tests for:
 - import cycles, self-loops, unresolved imports, isolated files, and package-boundary aggregation;
 - deterministic ordering and correct fan-in/fan-out counts;
-- large repositories and the HTML visual-node cap;
+- package-level import aggregation, incoming/outgoing package coupling and cycle concentration;
+- large repositories, package-map caps and the HTML module visual-node cap;
 - safe embedded JSON for file paths containing HTML/script-sensitive characters;
 - standalone HTML output with no CDN or external runtime dependencies.
 

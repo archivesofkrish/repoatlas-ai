@@ -35,6 +35,13 @@ def test_architecture_report_detects_cycles_packages_and_hotspots(tmp_path: Path
         item["source"] == "." and item["target"] == "services"
         for item in result["package_dependencies"]
     )
+    root_package = next(item for item in result["packages"] if item["name"] == ".")
+    service_package = next(item for item in result["packages"] if item["name"] == "services")
+    assert root_package["dependency_count"] == 1
+    assert root_package["cross_package_imports"] == 1
+    assert service_package["dependant_count"] == 1
+    assert service_package["cycle_file_count"] == 2
+    assert root_package["dependency_packages"] == ["services"]
 
 
 def test_architecture_report_is_deterministic_and_keeps_unresolved_count(tmp_path: Path):
@@ -61,7 +68,9 @@ def test_html_explorer_is_self_contained_and_escapes_untrusted_paths(tmp_path: P
     html = destination.read_text(encoding="utf-8")
 
     assert "<svg" in html
-    assert "RepoAtlas Architecture Explorer" in html
+    assert "RepoAtlas Architecture Observatory" in html
+    assert "Package map" in html
+    assert 'id="package-graph"' in html
     assert "https://cdn" not in html
     assert "src=" not in html
     assert html.count("</script>") == 2
