@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 - 2026-11-15
+
+- Harden local API workspace path resolution through a shared validator that rejects paths outside `REPOATLAS_ROOT`.
+- Reject non-finite hybrid-search numeric input at the Pydantic request boundary.
+- Add regression coverage for path traversal and API numeric constraints.
+- Document HTTP input validation and the local-only API deployment boundary.
+
 ## 0.5.0 - 2026-11-15
 
 - Add an optional OpenAI Responses API provider behind the `llm` extra.
