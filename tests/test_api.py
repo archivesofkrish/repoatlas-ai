@@ -149,8 +149,8 @@ def test_architecture_api_returns_dependency_insights(tmp_path: Path, monkeypatc
 def test_change_review_api_reports_working_tree_impact(tmp_path: Path, monkeypatch):
     import subprocess
 
-    (tmp_path / "core.py").write_text("VALUE = 1\\n", encoding="utf-8")
-    (tmp_path / "service.py").write_text("import core\\n", encoding="utf-8")
+    (tmp_path / "core.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "service.py").write_text("import core\n", encoding="utf-8")
 
     def git(*args):
         subprocess.run(
@@ -163,7 +163,7 @@ def test_change_review_api_reports_working_tree_impact(tmp_path: Path, monkeypat
     git("add", "-A")
     git("commit", "-m", "baseline")
     git("branch", "baseline")
-    (tmp_path / "core.py").write_text("VALUE = 2\\n", encoding="utf-8")
+    (tmp_path / "core.py").write_text("VALUE = 2\n", encoding="utf-8")
     monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
 
     response = TestClient(api.app).post(
