@@ -147,7 +147,8 @@ def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
                 visitor.visit(tree)
             except RecursionError:
                 report.warnings.append(
-                    f"Could not safely traverse {item.path}: " "AST nesting exceeded the recursion limit."
+                    f"Could not safely traverse {item.path}: " 
+                    "AST nesting exceeded the recursion limit."
                 )
                 continue
             report.symbols.extend(visitor.symbols)
