@@ -15,11 +15,11 @@ def _report(root: Path):
 def test_architecture_report_detects_cycles_packages_and_hotspots(tmp_path: Path):
     services = tmp_path / "services"
     services.mkdir()
-    (tmp_path / "main.py").write_text("import services.auth\\n", encoding="utf-8")
+    (tmp_path / "main.py").write_text("import services.auth\n", encoding="utf-8")
     (services / "__init__.py").write_text("", encoding="utf-8")
-    (services / "auth.py").write_text("import services.tokens\\n", encoding="utf-8")
-    (services / "tokens.py").write_text("import services.auth\\n", encoding="utf-8")
-    (tmp_path / "orphan.py").write_text("VALUE = 1\\n", encoding="utf-8")
+    (services / "auth.py").write_text("import services.tokens\n", encoding="utf-8")
+    (services / "tokens.py").write_text("import services.auth\n", encoding="utf-8")
+    (tmp_path / "orphan.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     result = _report(tmp_path)
 
@@ -53,7 +53,7 @@ def test_architecture_report_is_deterministic_and_keeps_unresolved_count(tmp_pat
 
 
 def test_html_explorer_is_self_contained_and_escapes_untrusted_paths(tmp_path: Path):
-    (tmp_path / "<script>.py").write_text("VALUE = 1\\n", encoding="utf-8")
+    (tmp_path / "<script>.py").write_text("VALUE = 1\n", encoding="utf-8")
     result = _report(tmp_path)
     result["repository"] = "</script>"
     destination = render_architecture_html(result, tmp_path / "out" / "map.html")
@@ -64,9 +64,10 @@ def test_html_explorer_is_self_contained_and_escapes_untrusted_paths(tmp_path: P
     assert "RepoAtlas Architecture Explorer" in html
     assert "https://cdn" not in html
     assert "src=\\"http" not in html
-    assert "</script>" not in html.replace("</script>", "", 1)
-    assert "\\\\u003c/script\\\\u003e" in html
-    assert "\\\\u003cscript\\\\u003e.py" in html
+    assert html.count("</script>") == 2
+    assert "&lt;/script&gt;" in html
+    assert "\\u003c/script\\u003e" in html
+    assert "\\u003cscript\\u003e.py" in html
     assert "repository" in html.lower()
 
 
