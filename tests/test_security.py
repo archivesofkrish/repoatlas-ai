@@ -1,5 +1,6 @@
 from repoatlas.security import detect_secrets, redact_secrets
 
+
 def test_redacts_common_token_patterns():
     text = "token = 'ghp_abcdefghijklmnopqrstuvwxyz123456'"
     assert detect_secrets(text)
