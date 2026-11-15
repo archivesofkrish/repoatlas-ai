@@ -122,7 +122,7 @@ def test_api_answer_skips_provider_when_no_evidence_exists(tmp_path: Path, monke
 
 def test_hybrid_search_rejects_non_finite_lexical_weight(tmp_path: Path, monkeypatch):
     (tmp_path / "core.py").write_text(
-        "def authenticate(token):\\n    return bool(token)\\n", encoding="utf-8"
+        "def authenticate(token):\n    return bool(token)\n", encoding="utf-8"
     )
     monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
     client = TestClient(api.app)
