@@ -1,4 +1,4 @@
-"""Language-aware analysis for Python source using the standard-library AST."""
+"""Revision-aware repository analysis using Python AST and optional Tree-sitter grammars."""
 
 from __future__ import annotations
 
