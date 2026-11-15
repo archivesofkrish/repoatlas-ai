@@ -19,6 +19,13 @@ def test_api_health_search_and_path_confinement(tmp_path: Path, monkeypatch):
     response = client.post("/v1/search", json={"path": ".", "query": "authenticate token"})
     assert response.status_code == 200
     assert response.json()["results"]
+    hybrid_response = client.post(
+        "/v1/hybrid-search",
+        json={"path": ".", "query": "authenticate token"},
+    )
+    assert hybrid_response.status_code == 200
+    assert hybrid_response.json()["retrieval"] == "lexical+graph"
+    assert hybrid_response.json()["results"]
     graph_response = client.post("/v1/graph", json={"path": "."})
     assert graph_response.status_code == 200
     assert graph_response.json()["stats"]["imports"] >= 1

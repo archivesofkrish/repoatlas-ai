@@ -1,0 +1,15 @@
+{
+  "dataset_version": "1.0",
+  "description": "Synthetic Python project for evaluating structural retrieval over a small dependency graph.",
+  "cases": [
+    {
+      "id": "password-registration-flow",
+      "query": "password history enforcement account registration",
+      "relevant": [
+        "src/security/password_policy.py",
+        "src/api/account_routes.py",
+        "src/services/onboarding.py"
+      ]
+    }
+  ]
+}

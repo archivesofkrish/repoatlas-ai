@@ -11,6 +11,7 @@ from repoatlas.analyzer import analyze_repository
 from repoatlas.graph import build_graph, impact_analysis
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
+from repoatlas.hybrid import hybrid_search_repository
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +27,15 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("path", type=Path)
     search.add_argument("query")
     search.add_argument("--top-k", type=int, default=8)
+    hybrid = sub.add_parser(
+        "hybrid-search",
+        help="Search source evidence and expand through resolved import relationships",
+    )
+    hybrid.add_argument("path", type=Path)
+    hybrid.add_argument("query")
+    hybrid.add_argument("--top-k", type=int, default=8)
+    hybrid.add_argument("--graph-depth", type=int, default=2)
+    hybrid.add_argument("--lexical-weight", type=float, default=0.65)
     graph = sub.add_parser("graph", help="Build a dependency and call-reference graph")
     graph.add_argument("path", type=Path)
     impact = sub.add_parser("impact", help="Find files affected by changing a target file")
@@ -65,6 +75,22 @@ def main(argv: list[str] | None = None) -> int:
                 print()
             if not hits:
                 print("No matching evidence found.")
+            return 0
+        if args.command == "hybrid-search":
+            hits = hybrid_search_repository(
+                args.path,
+                args.query,
+                top_k=args.top_k,
+                graph_depth=args.graph_depth,
+                lexical_weight=args.lexical_weight,
+            )
+            for hit in hits:
+                print(f"{hit.path}:{hit.start_line}-{hit.end_line}  score={hit.score}")
+                print(hit.reason)
+                print(hit.excerpt)
+                print()
+            if not hits:
+                print("No matching lexical or graph-linked evidence found.")
             return 0
         if args.command == "graph":
             result = build_graph(analyze_repository(args.path))

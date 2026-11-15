@@ -15,11 +15,12 @@ from repoatlas.analyzer import analyze_repository
 from repoatlas.graph import build_graph, impact_analysis
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
+from repoatlas.hybrid import hybrid_search_repository
 
 app = FastAPI(
     title="RepoAtlas AI",
-    version="0.2.0",
-    description="Read-only, evidence-grounded repository intelligence",
+    version="0.3.0",
+    description="Read-only repository intelligence with lexical and graph-aware evidence retrieval",
 )
 ALLOWED_ROOT = Path(os.environ.get("REPOATLAS_ROOT", ".")).resolve()
 
@@ -36,6 +37,11 @@ class AskRequest(RepositoryRequest):
 class SearchRequest(RepositoryRequest):
     query: str = Field(min_length=1, max_length=500)
     top_k: int = Field(default=8, ge=1, le=50)
+
+
+class HybridSearchRequest(SearchRequest):
+    graph_depth: int = Field(default=2, ge=1, le=3)
+    lexical_weight: float = Field(default=0.65, ge=0.1, le=0.9)
 
 
 class ImpactRequest(RepositoryRequest):
@@ -86,6 +92,35 @@ def search(payload: SearchRequest) -> dict:
             top_k=payload.top_k,
         )
         return {
+            "query": payload.query,
+            "results": [
+                {
+                    "path": hit.path,
+                    "start_line": hit.start_line,
+                    "end_line": hit.end_line,
+                    "score": hit.score,
+                    "excerpt": hit.excerpt,
+                    "reason": hit.reason,
+                }
+                for hit in hits
+            ],
+        }
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/hybrid-search")
+def hybrid_search_endpoint(payload: HybridSearchRequest) -> dict:
+    try:
+        hits = hybrid_search_repository(
+            resolve_project_path(payload.path),
+            payload.query,
+            top_k=payload.top_k,
+            graph_depth=payload.graph_depth,
+            lexical_weight=payload.lexical_weight,
+        )
+        return {
+            "retrieval": "lexical+graph",
             "query": payload.query,
             "results": [
                 {

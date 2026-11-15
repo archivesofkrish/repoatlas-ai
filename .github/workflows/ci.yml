@@ -40,6 +40,8 @@ jobs:
           download(sorted(requested))
           PY
       - name: Lint
-        run: ruff check src tests
+        run: ruff check src tests benchmarks
       - name: Test
         run: pytest --cov=repoatlas --cov-report=term-missing --cov-fail-under=80
+      - name: Retrieval benchmark
+        run: python benchmarks/evaluate_retrieval.py --top-k 5
