@@ -84,3 +84,22 @@ def test_hybrid_search_rejects_invalid_options(tmp_path: Path, kwargs):
     (tmp_path / "app.py").write_text("def run():\n    return True\n", encoding="utf-8")
     with pytest.raises(ValueError):
         hybrid_search_repository(tmp_path, "run", **kwargs)
+
+
+def test_hybrid_search_reads_each_source_file_only_once(tmp_path: Path, monkeypatch):
+    import repoatlas.scanner as scanner
+
+    _dependency_fixture(tmp_path)
+    original = scanner._safe_text
+    read_paths = []
+
+    def counted_read(path, max_file_bytes):
+        read_paths.append(path)
+        return original(path, max_file_bytes)
+
+    monkeypatch.setattr(scanner, "_safe_text", counted_read)
+    hits = hybrid_search_repository(tmp_path, "session token expiry enforcement")
+
+    assert hits
+    assert len(read_paths) == 4
+    assert len(set(read_paths)) == 4

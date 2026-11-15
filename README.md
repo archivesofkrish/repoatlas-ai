@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.3.0` — multi-language static analysis, dependency graphs, change-impact analysis, lexical and graph-aware retrieval, benchmark evaluation, CLI, and local API. The current answering workflow is retrieval-first; it does not yet generate conclusions with an LLM.
+**Current release:** `0.4.0` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, lexical and graph-aware retrieval, benchmark evaluation, CLI, and local API. The current answering workflow is retrieval-first; it does not yet generate conclusions with an LLM.
 
 ## Why RepoAtlas?
 
@@ -19,13 +19,14 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Capability | Implemented behaviour |
 |---|---|
 | Bounded repository scanner | Reads regular UTF-8 text files under file-count and byte limits; excludes generated folders, sensitive filenames, symlinks, and binary content |
+| Content-addressed snapshots | Captures each source file once; analysis and retrieval share the same in-memory contents, file hashes, and snapshot fingerprint |
 | Python analysis | Uses the standard-library AST to extract classes, functions, nested definitions, imports, calls, and docstrings without importing project modules |
 | Multi-language analysis | Optional Tree-sitter adapters for JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, and C# |
 | Dependency graph | Builds file import edges and best-effort symbol call-reference edges with source line provenance |
 | Change-impact analysis | Traverses reverse, statically resolved import relationships to find likely dependent files |
 | Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
 | Hybrid retrieval | Expands lexical matches through resolved import relationships, with explicit graph provenance and bounded depth |
-| Evidence packs | Returns file path, line range, commit SHA, excerpt, match reason, and explicit retrieval limitations |
+| Evidence packs | Returns file path, line range, commit SHA, content hash, snapshot fingerprint, excerpt, match reason, and explicit retrieval limitations |
 | Credential hygiene | Excludes common sensitive filenames and redacts several common token patterns in returned excerpts |
 | Interfaces | CLI and optional FastAPI service with scan, lexical/hybrid search, ask, graph, and impact endpoints |
 
@@ -128,7 +129,7 @@ REPOATLAS_ROOT=/path/to/workspace uvicorn repoatlas.api:app --host 127.0.0.1 --p
 |---|---|
 | `GET /health` | Health and read-only mode |
 | `POST /v1/scan` | Scan a repository under the configured root |
-| `POST /v1/search` | Retrieve line-addressable lexical evidence |
+| `POST /v1/search` | Retrieve line-addressable lexical evidence with snapshot and content-hash metadata |
 | `POST /v1/hybrid-search` | Retrieve lexical evidence plus bounded import-graph context |
 | `POST /v1/ask` | Create a question evidence pack |
 | `POST /v1/graph` | Build dependency and call-reference graph |
@@ -169,7 +170,8 @@ flowchart TD
 
 ```text
 src/repoatlas/
-├── analyzer.py   # Snapshot scan, Python AST, multi-language integration
+├── analyzer.py   # Snapshot-based Python AST and multi-language integration
+├── git.py        # Bounded Git revision lookup
 ├── api.py        # FastAPI routes and root confinement
 ├── cli.py        # scan, search, hybrid-search, ask, graph, impact
 ├── graph.py      # Dependency graph and transitive impact analysis
@@ -177,7 +179,7 @@ src/repoatlas/
 ├── models.py     # Typed repository and analysis models
 ├── parsing.py    # Optional Tree-sitter language adapters
 ├── qa.py         # Evidence-pack assembly and citation validation
-├── scanner.py    # Bounded, read-only file discovery
+├── scanner.py    # Bounded scanner and content-addressed snapshot capture
 ├── search.py     # Deterministic lexical retrieval
 └── security.py   # Heuristic secret detection and redaction
 ```
@@ -189,6 +191,8 @@ RepoAtlas treats repository content as untrusted input.
 - It does **not** import or execute repository code during scanning or static analysis.
 - It does not follow directory symlinks; file symlinks are excluded.
 - Default scan limits are 20,000 files, 1 MB per file, and 100 MB total content.
+- Each analysis or retrieval operation captures one bounded in-memory snapshot; parsing, ranking, graph expansion, and excerpts use the same captured text instead of re-reading files.
+- Snapshot fingerprints are derived from relative paths and SHA-256 file hashes. Citations include the file hash and are rejected when the corresponding source content changes.
 - Common generated directories, sensitive filenames such as `.env`, and credential stores such as `.aws`, `.ssh`, and `.config/gcloud` are excluded.
 - Tree-sitter grammar installation is explicit. A scan never downloads a grammar. Each file is capped at 1 MB, parsing has a time limit, and syntax traversal is bounded by node-count and depth limits.
 - The API resolves paths beneath `REPOATLAS_ROOT` and rejects path traversal.

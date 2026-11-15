@@ -3,29 +3,12 @@
 from __future__ import annotations
 
 import ast
-import os
-import subprocess
 from pathlib import Path
 
-from repoatlas.models import AnalysisReport, Symbol
+from repoatlas.git import get_revision as get_revision
+from repoatlas.models import AnalysisReport, RepositorySnapshot, Symbol
 from repoatlas.parsing import EXTENSION_GRAMMARS, parse_tree_sitter_file
-from repoatlas.scanner import scan_files
-
-
-def get_revision(root: Path) -> str | None:
-    """Return the current Git commit if available; never execute repository hooks."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            check=True, capture_output=True, text=True, timeout=2,
-            env={"PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1",
-                 "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
-                 "GIT_CONFIG_GLOBAL": os.devnull},
-        )
-        value = result.stdout.strip()
-        return value if len(value) == 40 and all(c in "0123456789abcdef" for c in value) else None
-    except (OSError, subprocess.SubprocessError):
-        return None
+from repoatlas.scanner import create_snapshot
 
 
 class _PythonVisitor(ast.NodeVisitor):
@@ -121,21 +104,20 @@ class _PythonVisitor(ast.NodeVisitor):
         })
 
 
-def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
-    """Scan a repository and extract Python symbols/imports without importing code."""
-    base = Path(root).expanduser().resolve(strict=True)
-    files, excluded, warnings = scan_files(base, **scan_limits)
+def analyze_snapshot(snapshot: RepositorySnapshot) -> AnalysisReport:
+    """Analyse exactly the source content captured in an immutable snapshot."""
     report = AnalysisReport(
-        root=str(base), revision=get_revision(base), excluded=excluded, warnings=warnings
+        root=snapshot.root,
+        revision=snapshot.revision,
+        snapshot_id=snapshot.snapshot_id,
+        files=[document.metadata for document in snapshot.documents],
+        excluded=dict(snapshot.excluded),
+        warnings=list(snapshot.warnings),
     )
-    report.files = files
 
-    for item in files:
-        try:
-            source = (base / item.path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            report.warnings.append(f"Could not read {item.path}: {type(exc).__name__}")
-            continue
+    for document in snapshot.documents:
+        item = document.metadata
+        source = document.content
         if item.language == "Python":
             try:
                 tree = ast.parse(source, filename=item.path)
@@ -163,3 +145,8 @@ def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
             if parsed["warning"]:
                 report.warnings.append(parsed["warning"])
     return report
+
+
+def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
+    """Capture a bounded source snapshot and analyse it without re-reading files."""
+    return analyze_snapshot(create_snapshot(root, **scan_limits))

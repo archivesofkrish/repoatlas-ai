@@ -19,7 +19,7 @@ from repoatlas.hybrid import hybrid_search_repository
 
 app = FastAPI(
     title="RepoAtlas AI",
-    version="0.3.0",
+    version="0.4.0",
     description="Read-only repository intelligence with lexical and graph-aware evidence retrieval",
 )
 ALLOWED_ROOT = Path(os.environ.get("REPOATLAS_ROOT", ".")).resolve()
@@ -101,6 +101,9 @@ def search(payload: SearchRequest) -> dict:
                     "score": hit.score,
                     "excerpt": hit.excerpt,
                     "reason": hit.reason,
+                    "sha256": hit.sha256,
+                    "snapshot_id": hit.snapshot_id,
+                    "revision": hit.revision,
                 }
                 for hit in hits
             ],
@@ -130,6 +133,9 @@ def hybrid_search_endpoint(payload: HybridSearchRequest) -> dict:
                     "score": hit.score,
                     "excerpt": hit.excerpt,
                     "reason": hit.reason,
+                    "sha256": hit.sha256,
+                    "snapshot_id": hit.snapshot_id,
+                    "revision": hit.revision,
                 }
                 for hit in hits
             ],

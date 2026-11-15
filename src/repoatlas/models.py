@@ -18,6 +18,24 @@ class RepositoryFile:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceDocument:
+    """Immutable source text and metadata captured during one repository scan."""
+    metadata: RepositoryFile
+    content: str
+
+
+@dataclass(frozen=True, slots=True)
+class RepositorySnapshot:
+    """Content-addressed, bounded in-memory view of one repository scan."""
+    root: str
+    snapshot_id: str
+    revision: str | None
+    documents: tuple[SourceDocument, ...]
+    excluded: dict[str, int]
+    warnings: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Symbol:
     """A declaration extracted by a language-specific static parser."""
     name: str
@@ -38,6 +56,9 @@ class SearchHit:
     score: float
     excerpt: str
     reason: str
+    sha256: str | None = None
+    snapshot_id: str | None = None
+    revision: str | None = None
 
 
 @dataclass(slots=True)
@@ -45,6 +66,7 @@ class AnalysisReport:
     """Serializable summary of a single repository scan."""
     root: str
     revision: str | None
+    snapshot_id: str | None = None
     files: list[RepositoryFile] = field(default_factory=list)
     symbols: list[Symbol] = field(default_factory=list)
     imports: dict[str, list[object]] = field(default_factory=dict)
@@ -57,6 +79,7 @@ class AnalysisReport:
         return {
             "root": self.root,
             "revision": self.revision,
+            "snapshot_id": self.snapshot_id,
             "files": [asdict(item) for item in self.files],
             "symbols": [asdict(item) for item in self.symbols],
             "imports": self.imports,
