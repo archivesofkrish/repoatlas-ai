@@ -42,8 +42,8 @@ class SearchRequest(RepositoryRequest):
 
 
 class HybridSearchRequest(SearchRequest):
-    graph_depth: int = Field(default=2, ge=1, le=3)
-    lexical_weight: float = Field(default=0.65, ge=0.1, le=0.9)
+    graph_depth: int = Field(default=2, ge=1, le=3, allow_inf_nan=False)
+    lexical_weight: float = Field(default=0.65, ge=0.1, le=0.9, allow_inf_nan=False)
 
 
 class ImpactRequest(RepositoryRequest):
