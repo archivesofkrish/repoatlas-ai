@@ -17,6 +17,7 @@ from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
+from repoatlas.api_validation import bounded_integer, bounded_weight, resolve_workspace_path
 
 app = FastAPI(
     title="RepoAtlas AI",
@@ -52,23 +53,7 @@ class ImpactRequest(RepositoryRequest):
 
 def resolve_project_path(raw: str) -> Path:
     """Resolve a project directory strictly below the configured workspace root."""
-    try:
-        candidate = (ALLOWED_ROOT / raw).resolve(strict=True)
-    except OSError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="Repository path does not exist or cannot be accessed",
-        ) from exc
-    try:
-        candidate.relative_to(ALLOWED_ROOT)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="Repository path escapes configured root",
-        ) from exc
-    if not candidate.is_dir():
-        raise HTTPException(status_code=400, detail="Repository path must be a directory")
-    return candidate
+    return resolve_workspace_path(ALLOWED_ROOT, raw)
 
 
 @app.get("/health")
