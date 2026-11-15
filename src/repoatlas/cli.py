@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"RepoAtlas AI {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
-    scan = sub.add_parser("scan", help="Summarise files, Python symbols, and imports")
+    scan = sub.add_parser("scan", help="Summarise files, source symbols, and imports")
     scan.add_argument("path", type=Path)
     scan.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     search = sub.add_parser("search", help="Search source files with line-addressable evidence")
@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Revision: {result['revision'] or 'not a Git checkout'}")
                 print(
                     f"Files: {result['stats']['files']} | "
-                    f"Python symbols: {result['stats']['symbols']}"
+                    f"Symbols: {result['stats']['symbols']}"
                 )
                 for item in result["files"]:
                     print(f"  {item['path']} ({item['language']}, {item['line_count']} lines)")

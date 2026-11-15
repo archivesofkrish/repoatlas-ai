@@ -65,6 +65,9 @@ IMPORT_NODE_TYPES = {
     "preproc_include", "include_statement", "using_directive",
 }
 CALL_NODE_TYPES = {"call_expression", "call", "method_invocation", "macro_invocation"}
+MAX_SOURCE_BYTES = 1_000_000
+MAX_TREE_SITTER_NODES = 100_000
+MAX_TREE_SITTER_DEPTH = 512
 
 
 def _text(node: Any, source: bytes) -> str:
@@ -75,19 +78,12 @@ def _name_for(node: Any, source: bytes) -> str | None:
     name_node = node.child_by_field_name("name")
     if name_node is not None:
         return _text(name_node, source).strip()
-    def find_name(candidate: Any) -> str | None:
+    pending = list(reversed(node.named_children))
+    while pending:
+        candidate = pending.pop()
         if candidate.type in NAME_NODE_TYPES:
             return _text(candidate, source).strip()
-        for child in candidate.named_children:
-            found = find_name(child)
-            if found:
-                return found
-        return None
-
-    for child in node.named_children:
-        found = find_name(child)
-        if found:
-            return found
+        pending.extend(reversed(candidate.named_children))
     return None
 
 
@@ -151,7 +147,7 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
         }
 
     source_bytes = source.encode("utf-8")
-    if len(source_bytes) > 1_000_000:
+    if len(source_bytes) > MAX_SOURCE_BYTES:
         return {
             "symbols": [], "imports": [], "calls": [],
             "warning": f"Tree-sitter source limit exceeded for {path}.",
@@ -179,14 +175,38 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
 
     def descendants_of_type(node: Any, node_type: str) -> list[Any]:
         found: list[Any] = []
-        for child in node.named_children:
-            if child.type == node_type:
-                found.append(child)
+        pending = list(reversed(node.named_children))
+        visited = 0
+        while pending and visited < MAX_TREE_SITTER_NODES:
+            candidate = pending.pop()
+            visited += 1
+            if candidate.type == node_type:
+                found.append(candidate)
             else:
-                found.extend(descendants_of_type(child, node_type))
+                pending.extend(reversed(candidate.named_children))
         return found
 
-    def visit(node: Any, scope: tuple[str, ...]) -> None:
+    pending: list[tuple[Any, tuple[str, ...], int]] = [(root, (), 0)]
+    visited = 0
+    depth_limited = False
+    while pending:
+        node, scope, depth = pending.pop()
+        visited += 1
+        if visited > MAX_TREE_SITTER_NODES:
+            warnings.append(
+                f"Tree-sitter node limit ({MAX_TREE_SITTER_NODES}) reached for {path}; "
+                "remaining syntax was not traversed."
+            )
+            break
+        if depth > MAX_TREE_SITTER_DEPTH:
+            if not depth_limited:
+                warnings.append(
+                    f"Tree-sitter depth limit ({MAX_TREE_SITTER_DEPTH}) reached for {path}; "
+                    "nested syntax was not traversed."
+                )
+                depth_limited = True
+            continue
+
         current_scope = scope
         kind = DEFINITIONS.get(node.type)
         if kind:
@@ -277,10 +297,8 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
                     "line": node.start_point.row + 1,
                 })
 
-        for child in node.named_children:
-            visit(child, current_scope)
-
-    visit(root, ())
+        for child in reversed(node.named_children):
+            pending.append((child, current_scope, depth + 1))
     return {
         "symbols": symbols,
         "imports": imports,

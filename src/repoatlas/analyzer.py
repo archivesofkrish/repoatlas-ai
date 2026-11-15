@@ -139,11 +139,17 @@ def analyze_repository(root: str | Path, **scan_limits) -> AnalysisReport:
         if item.language == "Python":
             try:
                 tree = ast.parse(source, filename=item.path)
-            except SyntaxError as exc:
+            except (SyntaxError, RecursionError) as exc:
                 report.warnings.append(f"Could not parse {item.path}: {type(exc).__name__}")
                 continue
             visitor = _PythonVisitor(item.path)
-            visitor.visit(tree)
+            try:
+                visitor.visit(tree)
+            except RecursionError:
+                report.warnings.append(
+                    f"Could not safely traverse {item.path}: AST nesting exceeded the recursion limit."
+                )
+                continue
             report.symbols.extend(visitor.symbols)
             report.imports[item.path] = sorted(set(visitor.imports))
             report.import_details[item.path] = visitor.import_details

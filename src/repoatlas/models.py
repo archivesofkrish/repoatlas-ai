@@ -19,7 +19,7 @@ class RepositoryFile:
 
 @dataclass(frozen=True, slots=True)
 class Symbol:
-    """A declaration discovered with Python's AST parser."""
+    """A declaration extracted by a language-specific static parser."""
     name: str
     qualified_name: str
     kind: str

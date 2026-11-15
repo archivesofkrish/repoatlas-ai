@@ -176,12 +176,12 @@ RepoAtlas treats repository content as untrusted input.
 - It does not follow directory symlinks; file symlinks are excluded.
 - Default scan limits are 20,000 files, 1 MB per file, and 100 MB total content.
 - Common generated directories, sensitive filenames such as `.env`, and credential stores such as `.aws`, `.ssh`, and `.config/gcloud` are excluded.
-- Tree-sitter grammar installation is explicit. A scan never downloads a grammar.
+- Tree-sitter grammar installation is explicit. A scan never downloads a grammar. Each file is capped at 1 MB, parsing has a time limit, and syntax traversal is bounded by node-count and depth limits.
 - The API resolves paths beneath `REPOATLAS_ROOT` and rejects path traversal.
 - Secret detection is heuristic and incomplete. It cannot guarantee that every credential has been removed.
 - Language grammars expose different syntax trees. The generic adapter captures common definitions, imports, and calls but does not promise complete language-semantic understanding.
 - Import resolution is best-effort. Dynamic imports, macros, generated code, module aliases, build-system rules, dependency injection, and runtime reflection are not fully modelled.
-- Call-reference edges are name-based and marked resolved only when a unique symbol candidate exists.
+- Call-reference edges are best-effort and are marked resolved only when a unique declaration exists in the same source file; cross-file name-only matches remain unresolved.
 - Impact analysis follows statically resolved file imports only; it is not a complete runtime blast-radius calculation.
 - Search is lexical and can miss relevant code described using different terminology.
 
@@ -191,10 +191,10 @@ See [SECURITY.md](SECURITY.md) for reporting guidance and [CONTRIBUTING.md](CONT
 
 ```bash
 ruff check src tests
-pytest --cov=repoatlas --cov-report=term-missing
+pytest --cov=repoatlas --cov-report=term-missing --cov-fail-under=80
 ```
 
-CI runs on Python 3.11, 3.12, and 3.13. It installs the development dependencies, explicitly caches the language grammars used by parsing tests, runs Ruff, and executes the test suite with coverage reporting.
+CI runs on Python 3.11, 3.12, 3.13, and 3.14. It validates the configured grammar names against the published Tree-sitter manifest, caches those grammars, runs Ruff, and executes the test suite with an enforced 80% coverage floor.
 
 The tests use temporary repositories and synthetic source fixtures; no personal or proprietary code is required.
 

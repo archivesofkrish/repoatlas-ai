@@ -15,7 +15,7 @@ pip install -e '.[dev]'
 
 ```bash
 ruff check src tests
-pytest -q
+pytest --cov=repoatlas --cov-report=term-missing --cov-fail-under=80
 ```
 
 ## Pull request expectations
@@ -29,4 +29,4 @@ pytest -q
 
 ## Scope
 
-The initial release intentionally uses deterministic lexical retrieval and Python AST analysis. New language support, semantic retrieval, external model providers, and automated actions require explicit design and security review.
+The current release combines deterministic lexical retrieval, Python AST analysis, and optional Tree-sitter parsing for supported languages. New language support, semantic or model-assisted retrieval, external model providers, and automated actions require explicit design, evaluation, and security review.

@@ -100,3 +100,10 @@ def test_quoted_c_include_is_marked_as_source_relative_when_cached():
     if result["warning"] and "not installed" in result["warning"]:
         pytest.skip(result["warning"])
     assert any(item["target"] == "./internal.h" for item in result["imports"])
+
+def test_tree_sitter_traversal_has_a_depth_limit_when_cached():
+    nested = "(" * 600 + "1" + ")" * 600
+    result = parse_tree_sitter_file("src/deep.js", f"function run() {{ return {nested}; }}")
+    if result["warning"] and "not installed" in result["warning"]:
+        pytest.skip(result["warning"])
+    assert "depth limit" in (result["warning"] or "").lower()
