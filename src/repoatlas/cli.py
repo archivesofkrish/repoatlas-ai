@@ -1,17 +1,13 @@
 """Command-line interface for RepoAtlas AI."""
-
 from __future__ import annotations
-
 import argparse
 import json
 import sys
 from pathlib import Path
-
 from repoatlas import __version__
 from repoatlas.analyzer import analyze_repository
 from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="repoatlas", description="Evidence-grounded repository intelligence")
@@ -29,7 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("question")
     ask.add_argument("--top-k", type=int, default=6)
     return parser
-
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
@@ -63,7 +58,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"repoatlas: error: {exc}", file=sys.stderr)
         return 2
     return 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
