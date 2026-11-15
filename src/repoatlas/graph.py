@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import posixpath
 from dataclasses import asdict, dataclass
 
 from repoatlas.models import AnalysisReport
@@ -17,13 +18,14 @@ class GraphEdge:
     resolved: bool
 
 
-def _resolve_module(module: str, files: set[str]) -> str | None:
+def _resolve_module(module: str, files: set[str], source_path: str) -> str | None:
     cleaned = module.strip().strip("'").strip('"').replace("\\", "/")
     if not cleaned or cleaned.startswith(("http://", "https://")):
         return None
     if cleaned.startswith("."):
-        return None
-    base = cleaned.replace(".", "/").lstrip("/")
+        base = posixpath.normpath(posixpath.join(posixpath.dirname(source_path), cleaned))
+    else:
+        base = cleaned.replace(".", "/").lstrip("/")
     candidates = [
         base, base + ".py", base + ".js", base + ".jsx", base + ".ts",
         base + ".tsx", base + ".go", base + ".rs", base + ".java",
@@ -53,7 +55,7 @@ def build_graph(report: AnalysisReport) -> dict:
                 target, line = str(item.get("target", "")), int(item.get("line", 1))
             else:
                 target, line = str(item), 1
-            resolved = _resolve_module(target, file_paths)
+            resolved = _resolve_module(target, file_paths, path)
             edges.append(GraphEdge(
                 source=path, target=resolved or target, kind="imports",
                 path=path, line=line, resolved=resolved is not None,
