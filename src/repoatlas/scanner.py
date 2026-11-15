@@ -72,11 +72,7 @@ def scan_files(
     max_total_bytes: int = 100_000_000,
     extra_ignores: set[str] | None = None,
 ) -> tuple[list[RepositoryFile], dict[str, int], list[str]]:
-    """Discover bounded text files without following symlinks.
-
-    Ignore matching is directory/name based. A future release can add .gitignore parsing;
-    callers can currently provide explicit extra directory/file names.
-    """
+    """Discover bounded text files without following symlinks."""
     base = Path(root).expanduser().resolve(strict=True)
     if not base.is_dir():
         raise ScanError(f"Repository path is not a directory: {base}")
@@ -133,11 +129,8 @@ def scan_files(
                 continue
             data, text = result
             files.append(RepositoryFile(
-                path=rel,
-                language=language,
-                size_bytes=len(data),
-                line_count=len(text.splitlines()),
-                sha256=hashlib.sha256(data).hexdigest(),
+                path=rel, language=language, size_bytes=len(data),
+                line_count=len(text.splitlines()), sha256=hashlib.sha256(data).hexdigest(),
             ))
             total_bytes += len(data)
             if len(files) >= max_files:
