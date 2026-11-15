@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.5.1` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, bounded local API, and strict API path/numeric input validation.
+**Current release:** `0.6.0` — content-addressed source snapshots, multi-language static analysis, dependency graphs, change-impact analysis, architecture metrics and an interactive offline explorer, lexical and graph-aware retrieval, benchmark evaluation, optional citation-checked LLM answers, and a bounded local API.
 
 ## Why RepoAtlas?
 
@@ -24,6 +24,8 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Multi-language analysis | Optional Tree-sitter adapters for JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, and C# |
 | Dependency graph | Builds file import edges and best-effort symbol call-reference edges with source line provenance |
 | Change-impact analysis | Traverses reverse, statically resolved import relationships to find likely dependent files |
+| Architecture intelligence | Detects statically resolved dependency cycles, package boundaries, isolated files and high fan-in/fan-out modules |
+| Interactive architecture explorer | Generates a self-contained HTML graph with file search, package/language filters, module inspection, and pan/zoom controls |
 | Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
 | Hybrid retrieval | Expands lexical matches through resolved import relationships, with explicit graph provenance and bounded depth |
 | Evidence packs | Returns file path, line range, commit SHA, content hash, snapshot fingerprint, excerpt, match reason, and explicit retrieval limitations |
@@ -136,6 +138,19 @@ repoatlas impact PATH path/to/module.py --max-depth 5
 
 Traverses reverse resolved-import edges and reports direct and transitive dependants. This is a static estimate, not a guarantee of runtime blast radius.
 
+### Architecture explorer
+
+```bash
+# Generate a standalone HTML explorer inside the repository
+repoatlas architecture PATH
+
+# Choose an output path or request JSON metrics
+repoatlas architecture PATH --output ./artifacts/architecture.html
+repoatlas architecture PATH --json
+```
+
+The report includes file-level fan-in/fan-out, structural hotspots, top-level package boundaries, isolated files and strongly connected components (static import cycles). The HTML explorer is self-contained and works offline: search paths, filter by language or package, select a module to inspect its dependencies/dependants, and pan or zoom the graph. The visual map prioritises the most structurally connected modules when a repository is large; the JSON/API report retains all scanned file metrics. A cycle or high structural score is a review signal, not proof of a defect or a maintainability score.
+
 ## Optional HTTP API
 
 Install the API extra and start the service with an explicit workspace root:
@@ -155,6 +170,7 @@ REPOATLAS_ROOT=/path/to/workspace uvicorn repoatlas.api:app --host 127.0.0.1 --p
 | `POST /v1/answer` | Optional provider-backed answer with evidence-ID and citation validation |
 | `POST /v1/graph` | Build dependency and call-reference graph |
 | `POST /v1/impact` | Estimate likely file impact |
+| `POST /v1/architecture` | Return package boundaries, dependency cycles, isolated files and structural hotspots |
 
 Example graph request:
 
@@ -164,7 +180,7 @@ curl -s http://127.0.0.1:8000/v1/graph \\
   -d '{"path":"my-project"}'
 ```
 
-The API confines requested paths to `REPOATLAS_ROOT`, rejects non-finite hybrid-search weights, and validates bounded request fields. It is a local development interface, not a production multi-tenant service. Add authentication, authorization, rate limits, worker isolation, and operational controls before network exposure. The `/v1/answer` route requires the optional `llm` dependency and `OPENAI_API_KEY`; only retrieved, redacted excerpts and the question are sent to the provider.
+The API confines requested paths to `REPOATLAS_ROOT`, rejects non-finite hybrid-search weights, validates bounded request fields, and exposes structured architecture intelligence at `POST /v1/architecture`. It is a local development interface, not a production multi-tenant service. Add authentication, authorization, rate limits, worker isolation, and operational controls before network exposure. The `/v1/answer` route requires the optional `llm` dependency and `OPENAI_API_KEY`; only retrieved, redacted excerpts and the question are sent to the provider.
 
 ## Architecture
 
@@ -217,7 +233,7 @@ RepoAtlas treats repository content as untrusted input.
 - Snapshot fingerprints are derived from relative paths and SHA-256 file hashes. Citations include the file hash and are rejected when the corresponding source content changes.
 - Common generated directories, sensitive filenames such as `.env`, and credential stores such as `.aws`, `.ssh`, and `.config/gcloud` are excluded.
 - Tree-sitter grammar installation is explicit. A scan never downloads a grammar. Each file is capped at 1 MB, parsing has a time limit, and syntax traversal is bounded by node-count and depth limits.
-- The API resolves paths beneath `REPOATLAS_ROOT` and rejects path traversal.
+- The API resolves paths beneath `REPOATLAS_ROOT` and rejects path traversal. Architecture metrics only count statically resolved imports. Strongly connected components indicate static cycles but do not prove runtime defects. The HTML graph is capped to the highest structural-score files when the repository is large; the structured report remains complete.
 - Secret detection is heuristic and incomplete. It cannot guarantee that every credential has been removed.
 - Language grammars expose different syntax trees. The generic adapter captures common definitions, imports, and calls but does not promise complete language-semantic understanding.
 - Import resolution is best-effort. Dynamic imports, macros, generated code, module aliases, build-system rules, dependency injection, and runtime reflection are not fully modelled.
@@ -252,7 +268,7 @@ The tests use temporary repositories and synthetic source fixtures; no personal 
 | 2 | Tree-sitter multi-language parsing, import/call graph, transitive impact | Implemented |
 | 3 | Hybrid retrieval, graph-aware ranking, benchmark corpus, retrieval evaluation | Implemented |
 | 4 | Optional provider-backed answers with strict structured output and citation provenance checks | Implemented; semantic entailment remains unverified |
-| 5 | Interactive architecture explorer and investigation dashboard | Planned |
+| 5 | Interactive architecture explorer, module inspector, dependency cycles and package metrics | Implemented in 0.6.0 |
 | 6 | Incremental indexing, secure workspaces, and CI/IDE integrations | Planned |
 
 Generative answers are optional and separated from retrieval-only evidence packs. Provenance validation is implemented; semantic claim-to-source entailment still requires independent evaluation and human review.

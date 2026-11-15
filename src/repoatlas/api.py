@@ -18,11 +18,15 @@ from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
 from repoatlas.api_validation import resolve_workspace_path
+from repoatlas.architecture import build_architecture_report
 
 app = FastAPI(
     title="RepoAtlas AI",
-    version="0.5.0",
-    description="Read-only repository intelligence with lexical and graph-aware evidence retrieval",
+    version="0.6.0",
+    description=(
+        "Read-only repository intelligence with evidence retrieval "
+        "and architecture analysis"
+    ),
 )
 ALLOWED_ROOT = Path(os.environ.get("REPOATLAS_ROOT", ".")).resolve()
 
@@ -178,5 +182,15 @@ def impact_endpoint(payload: ImpactRequest) -> dict:
             payload.target,
             max_depth=payload.max_depth,
         )
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/architecture")
+def architecture_endpoint(payload: RepositoryRequest) -> dict:
+    """Return package, hotspot, isolated-file and dependency-cycle analysis."""
+    try:
+        report = analyze_repository(resolve_project_path(payload.path))
+        return build_architecture_report(report, build_graph(report))
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

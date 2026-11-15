@@ -13,6 +13,7 @@ from repoatlas.qa import answer_question
 from repoatlas.search import search_repository
 from repoatlas.hybrid import hybrid_search_repository
 from repoatlas.llm import ProviderError, generate_grounded_answer
+from repoatlas.architecture import build_architecture_report, render_architecture_html
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +40,25 @@ def build_parser() -> argparse.ArgumentParser:
     hybrid.add_argument("--lexical-weight", type=float, default=0.65)
     graph = sub.add_parser("graph", help="Build a dependency and call-reference graph")
     graph.add_argument("path", type=Path)
+    architecture = sub.add_parser(
+        "architecture",
+        help="Create architecture metrics and a self-contained interactive dependency explorer",
+    )
+    architecture.add_argument("path", type=Path)
+    architecture.add_argument(
+        "--json", action="store_true", help="Print architecture metrics as JSON"
+    )
+    architecture.add_argument(
+        "--output",
+        type=Path,
+        help="HTML output path (default: PATH/repoatlas-architecture.html)",
+    )
+    architecture.add_argument(
+        "--max-nodes",
+        type=int,
+        default=180,
+        help="Maximum modules rendered in the HTML graph (20–500)",
+    )
     impact = sub.add_parser("impact", help="Find files affected by changing a target file")
     impact.add_argument("path", type=Path)
     impact.add_argument("target")
@@ -103,6 +123,26 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "graph":
             result = build_graph(analyze_repository(args.path))
             print(json.dumps(result, indent=2))
+            return 0
+        if args.command == "architecture":
+            analysis = analyze_repository(args.path)
+            architecture_report = build_architecture_report(analysis, build_graph(analysis))
+            if args.json:
+                if args.output is not None:
+                    raise ValueError("--output cannot be combined with --json")
+                print(json.dumps(architecture_report, indent=2))
+            else:
+                destination = args.output or (args.path / "repoatlas-architecture.html")
+                written = render_architecture_html(
+                    architecture_report, destination, max_nodes=args.max_nodes
+                )
+                stats = architecture_report["stats"]
+                print(f"Architecture explorer written to: {written}")
+                print(
+                    f"Files: {stats['files']} | Packages: {stats['packages']} | "
+                    f"Resolved dependencies: {stats['resolved_dependencies']} | "
+                    f"Cycles: {stats['dependency_cycles']}"
+                )
             return 0
         if args.command == "impact":
             graph_data = build_graph(analyze_repository(args.path))

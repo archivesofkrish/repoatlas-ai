@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 - 2026-11-15
+
+- Add architecture intelligence for file-level dependency hotspots, package boundaries, isolated files, and strongly connected import cycles.
+- Add a self-contained interactive HTML dependency explorer with search, package/language filters, module inspection, and pan/zoom controls.
+- Add the `repoatlas architecture` CLI command and `POST /v1/architecture` API endpoint.
+- Keep the analysis static and read-only; unresolved imports and architectural limitations remain explicit.
+
 ## 0.5.1 - 2026-11-15
 
 - Harden local API workspace path resolution through a shared validator that rejects paths outside `REPOATLAS_ROOT`.

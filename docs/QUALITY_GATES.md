@@ -48,3 +48,14 @@ Coverage is a regression guard, not a correctness proof. The enforced 80% floor 
 ## HTTP input validation
 
 The local API validates request shape and numeric bounds before analysis begins. Workspace paths must resolve to existing directories below `REPOATLAS_ROOT`; inaccessible paths and paths that escape the workspace are rejected. Hybrid-search numeric fields reject non-finite values such as NaN and infinity. Keep the service bound to localhost unless an authentication, authorization, rate-limiting and isolation layer is added.
+
+## Architecture explorer changes
+
+When changing graph resolution or architecture metrics, add tests for:
+- import cycles, self-loops, unresolved imports, isolated files, and package-boundary aggregation;
+- deterministic ordering and correct fan-in/fan-out counts;
+- large repositories and the HTML visual-node cap;
+- safe embedded JSON for file paths containing HTML/script-sensitive characters;
+- standalone HTML output with no CDN or external runtime dependencies.
+
+Treat dependency cycles, fan-in and structural scores as review heuristics. Do not label them as defects, runtime reachability or maintainability scores without separate evidence.
