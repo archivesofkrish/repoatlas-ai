@@ -133,7 +133,10 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
     if not has_parser(grammar):
         return {
             "symbols": [], "imports": [], "calls": [],
-            "warning": f"Tree-sitter grammar '{grammar}' is not installed or cached; file indexed as text.",
+            "warning": (
+                f"Tree-sitter grammar '{grammar}' is not installed or cached; "
+                "file indexed as text."
+            ),
         }
 
     source_bytes = source.encode("utf-8")
