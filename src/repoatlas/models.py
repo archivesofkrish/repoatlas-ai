@@ -10,7 +10,6 @@ from typing import Any
 @dataclass(frozen=True, slots=True)
 class RepositoryFile:
     """A safe, text-readable file in a repository snapshot."""
-
     path: str
     language: str
     size_bytes: int
@@ -21,7 +20,6 @@ class RepositoryFile:
 @dataclass(frozen=True, slots=True)
 class Symbol:
     """A declaration discovered with Python's AST parser."""
-
     name: str
     qualified_name: str
     kind: str
@@ -34,7 +32,6 @@ class Symbol:
 @dataclass(frozen=True, slots=True)
 class SearchHit:
     """A line-addressable search result."""
-
     path: str
     start_line: int
     end_line: int
@@ -46,7 +43,6 @@ class SearchHit:
 @dataclass(slots=True)
 class AnalysisReport:
     """Serializable summary of a single repository scan."""
-
     root: str
     revision: str | None
     files: list[RepositoryFile] = field(default_factory=list)
