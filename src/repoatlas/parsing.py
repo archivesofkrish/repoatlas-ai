@@ -29,7 +29,7 @@ EXTENSION_GRAMMARS = {
     ".hpp": "cpp",
     ".hh": "cpp",
     ".rb": "ruby",
-    ".cs": "c_sharp",
+    ".cs": "csharp",
 }
 
 DEFINITIONS = {
@@ -177,6 +177,15 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
     if root.has_error:
         warnings.append(f"Tree-sitter recovered from syntax errors in {path}.")
 
+    def descendants_of_type(node: Any, node_type: str) -> list[Any]:
+        found: list[Any] = []
+        for child in node.named_children:
+            if child.type == node_type:
+                found.append(child)
+            else:
+                found.extend(descendants_of_type(child, node_type))
+        return found
+
     def visit(node: Any, scope: tuple[str, ...]) -> None:
         current_scope = scope
         kind = DEFINITIONS.get(node.type)
@@ -219,7 +228,7 @@ def parse_tree_sitter_file(path: str, source: str) -> dict[str, Any]:
 
         if node.type in IMPORT_NODE_TYPES:
             if node.type == "import_declaration":
-                specs = [child for child in node.named_children if child.type == "import_spec"]
+                specs = descendants_of_type(node, "import_spec")
                 if specs:
                     for spec in specs:
                         imports.append({

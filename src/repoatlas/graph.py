@@ -71,11 +71,11 @@ def _resolve_module(module: str, files: set[str], source_path: str) -> str | Non
 def build_graph(report: AnalysisReport) -> dict:
     """Build file dependency edges and best-effort symbol call-reference edges."""
     file_paths = {item.path for item in report.files}
-    symbols_by_name: dict[str, list[str]] = defaultdict(list)
+    symbols_by_name: dict[str, list[tuple[str, str]]] = defaultdict(list)
     nodes = set(file_paths)
     for symbol in report.symbols:
         node_id = f"{symbol.path}::{symbol.qualified_name}"
-        symbols_by_name[symbol.name].append(node_id)
+        symbols_by_name[symbol.name].append((symbol.path, node_id))
         nodes.add(node_id)
 
     edges: list[GraphEdge] = []
@@ -124,7 +124,12 @@ def build_graph(report: AnalysisReport) -> dict:
             target = str(call.get("target", ""))
             source_name = str(call.get("source") or path)
             source = f"{path}::{source_name}" if source_name != path else path
-            candidates = symbols_by_name.get(target, [])
+            # Name-only matching across a repository can invent cross-file edges.
+            # Resolve a call only to a unique declaration in its own source file.
+            candidates = [
+                node_id for candidate_path, node_id in symbols_by_name.get(target, [])
+                if candidate_path == path
+            ]
             resolved_target = candidates[0] if len(candidates) == 1 else None
             edges.append(GraphEdge(
                 source=source,
