@@ -129,3 +129,18 @@ def test_hybrid_search_request_rejects_non_finite_lexical_weight():
         api.HybridSearchRequest.model_validate(
             {"path": ".", "query": "authenticate", "lexical_weight": float("nan")}
         )
+
+def test_architecture_api_returns_dependency_insights(tmp_path: Path, monkeypatch):
+    (tmp_path / "core.py").write_text(
+        "def calculate():\\n    return 1\\n", encoding="utf-8"
+    )
+    (tmp_path / "api.py").write_text("import core\\n", encoding="utf-8")
+    monkeypatch.setattr(api, "ALLOWED_ROOT", tmp_path.resolve())
+
+    response = TestClient(api.app).post("/v1/architecture", json={"path": "."})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["stats"]["files"] == 2
+    assert body["stats"]["resolved_dependencies"] >= 1
+    assert body["hubs"][0]["path"] in {"core.py", "api.py"}
