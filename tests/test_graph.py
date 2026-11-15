@@ -49,6 +49,26 @@ def test_relative_javascript_import_resolves_when_grammar_cached(tmp_path: Path)
     ), (report.warnings, graph["edges"])
 
 
+def test_python_package_relative_import_resolves(tmp_path: Path):
+    package = tmp_path / "src" / "pkg"
+    package.mkdir(parents=True)
+    (tmp_path / "src" / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "api.py").write_text(
+        "from .utils import helper\\n", encoding="utf-8"
+    )
+    (package / "utils.py").write_text(
+        "def helper():\\n    return True\\n", encoding="utf-8"
+    )
+    graph = build_graph(analyze_repository(tmp_path))
+    assert any(
+        edge["source"] == "src/pkg/api.py"
+        and edge["target"] == "src/pkg/utils.py"
+        and edge["resolved"]
+        for edge in graph["edges"]
+    )
+
+
 def test_impact_rejects_unknown_target(tmp_path: Path):
     (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
     graph = build_graph(analyze_repository(tmp_path))
