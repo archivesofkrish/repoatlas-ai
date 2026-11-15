@@ -8,7 +8,7 @@
 
 RepoAtlas AI is a read-only codebase intelligence workbench. It inventories repositories, extracts source structure, builds dependency and call-reference graphs, retrieves line-addressable evidence, and estimates the files affected by a change. It is designed around a simple rule: engineering explanations should be inspectable against the exact source that produced them.
 
-**Current release:** `0.2.0` — multi-language static analysis, graph construction, impact analysis, evidence search, CLI, and local API. The current answering workflow is retrieval-first; it does not yet generate conclusions with an LLM.
+**Current release:** `0.3.0` — multi-language static analysis, dependency graphs, change-impact analysis, lexical and graph-aware retrieval, benchmark evaluation, CLI, and local API. The current answering workflow is retrieval-first; it does not yet generate conclusions with an LLM.
 
 ## Why RepoAtlas?
 
@@ -24,9 +24,10 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Dependency graph | Builds file import edges and best-effort symbol call-reference edges with source line provenance |
 | Change-impact analysis | Traverses reverse, statically resolved import relationships to find likely dependent files |
 | Lexical retrieval | Ranks files and source lines with deterministic term-frequency/inverse-document-frequency scoring |
+| Hybrid retrieval | Expands lexical matches through resolved import relationships, with explicit graph provenance and bounded depth |
 | Evidence packs | Returns file path, line range, commit SHA, excerpt, match reason, and explicit retrieval limitations |
 | Credential hygiene | Excludes common sensitive filenames and redacts several common token patterns in returned excerpts |
-| Interfaces | CLI and optional FastAPI service with scan, search, ask, graph, and impact endpoints |
+| Interfaces | CLI and optional FastAPI service with scan, lexical/hybrid search, ask, graph, and impact endpoints |
 
 The multi-language parser is an optional capability. Install and cache grammars explicitly; repository scans do not download parser code or execute project code.
 
@@ -55,6 +56,7 @@ Then analyse any repository:
 ```bash
 repoatlas scan /path/to/repository
 repoatlas search /path/to/repository "authentication token validation" --top-k 8
+repoatlas hybrid-search /path/to/repository "authentication token validation" --top-k 8
 repoatlas ask /path/to/repository "Where is authentication implemented?"
 repoatlas graph /path/to/repository
 repoatlas impact /path/to/repository src/core/auth.py
@@ -80,6 +82,14 @@ repoatlas search PATH "query terms" --top-k 8
 ```
 
 Returns ranked source excerpts with exact file paths and best-matching line numbers. Identifier splitting allows a query such as `create user` to match `create_user`. Ranking is deterministic lexical retrieval, not embedding-based semantic search.
+
+### Hybrid search
+
+```bash
+repoatlas hybrid-search PATH "session token expiry" --top-k 8 --graph-depth 2
+```
+
+Hybrid search starts with lexical matches and expands through statically resolved import edges. It can surface consumers and dependencies that do not directly match the query. Graph-expanded results are explicitly labelled, cite a real line in the related file, and include the import location that established the relationship. The default depth is two hops; allowed depth is one to three. The score combines normalised lexical relevance (65% by default) with decayed graph proximity (35%). This is structural context, not semantic understanding or proof of runtime reachability.
 
 ### Ask
 
@@ -118,7 +128,8 @@ REPOATLAS_ROOT=/path/to/workspace uvicorn repoatlas.api:app --host 127.0.0.1 --p
 |---|---|
 | `GET /health` | Health and read-only mode |
 | `POST /v1/scan` | Scan a repository under the configured root |
-| `POST /v1/search` | Retrieve line-addressable evidence |
+| `POST /v1/search` | Retrieve line-addressable lexical evidence |
+| `POST /v1/hybrid-search` | Retrieve lexical evidence plus bounded import-graph context |
 | `POST /v1/ask` | Create a question evidence pack |
 | `POST /v1/graph` | Build dependency and call-reference graph |
 | `POST /v1/impact` | Estimate likely file impact |
@@ -147,9 +158,11 @@ flowchart TD
     G --> H[Dependency and call graph]
     G --> I[Lexical retrieval index]
     H --> J[Impact analysis]
-    I --> K[Evidence pack]
-    J --> K
-    K --> L[File, line, and revision citations]
+    H --> K[Graph-aware expansion]
+    I --> L[Hybrid ranking]
+    K --> L
+    L --> M[Evidence pack]
+    M --> N[File, line, and revision citations]
 ```
 
 ### Source layout
@@ -158,8 +171,9 @@ flowchart TD
 src/repoatlas/
 ├── analyzer.py   # Snapshot scan, Python AST, multi-language integration
 ├── api.py        # FastAPI routes and root confinement
-├── cli.py        # scan, search, ask, graph, impact
+├── cli.py        # scan, search, hybrid-search, ask, graph, impact
 ├── graph.py      # Dependency graph and transitive impact analysis
+├── hybrid.py     # Bounded lexical + dependency-graph retrieval
 ├── models.py     # Typed repository and analysis models
 ├── parsing.py    # Optional Tree-sitter language adapters
 ├── qa.py         # Evidence-pack assembly and citation validation
@@ -183,16 +197,19 @@ RepoAtlas treats repository content as untrusted input.
 - Import resolution is best-effort. Dynamic imports, macros, generated code, module aliases, build-system rules, dependency injection, and runtime reflection are not fully modelled.
 - Call-reference edges are best-effort and are marked resolved only when a unique declaration exists in the same source file; cross-file name-only matches remain unresolved.
 - Impact analysis follows statically resolved file imports only; it is not a complete runtime blast-radius calculation.
-- Search is lexical and can miss relevant code described using different terminology.
+- The `search` command and `/v1/search` endpoint use lexical retrieval. `hybrid-search` adds import-graph context but can only expand from a lexical seed and only across resolved static imports; it does not provide embedding-based semantic recall.
 
 See [SECURITY.md](SECURITY.md) for reporting guidance and [CONTRIBUTING.md](CONTRIBUTING.md) for engineering standards.
 
 ## Testing and quality
 
 ```bash
-ruff check src tests
+ruff check src tests benchmarks
 pytest --cov=repoatlas --cov-report=term-missing --cov-fail-under=80
+python benchmarks/evaluate_retrieval.py --top-k 5
 ```
+
+The checked-in four-scenario synthetic benchmark compares lexical-only and hybrid retrieval using MRR@k, Recall@k, and nDCG@k. It includes implementation, API consumer, downstream workflow, and decoy files for password registration, tenant scoping, credential revocation, and role-based permissions. It is a reproducible regression harness, not a claim of general performance on arbitrary repositories. See [benchmarks/README.md](benchmarks/README.md) for the dataset and metric definitions.
 
 CI runs on Python 3.11, 3.12, 3.13, and 3.14. It validates the configured grammar names against the published Tree-sitter manifest, caches those grammars, runs Ruff, and executes the test suite with an enforced 80% coverage floor.
 
@@ -203,8 +220,8 @@ The tests use temporary repositories and synthetic source fixtures; no personal 
 | Stage | Capability | Status |
 |---|---|---|
 | 1 | Safe scanner, Python AST, lexical evidence packs, CLI, local API, tests, CI | Implemented |
-| 2 | Tree-sitter multi-language parsing, import/call graph, transitive impact | Implemented in current feature branch |
-| 3 | Hybrid retrieval, graph-aware ranking, benchmark corpus, retrieval evaluation | Next |
+| 2 | Tree-sitter multi-language parsing, import/call graph, transitive impact | Implemented |
+| 3 | Hybrid retrieval, graph-aware ranking, benchmark corpus, retrieval evaluation | Implemented |
 | 4 | Optional model-provider abstraction with claim-to-citation validation | Planned |
 | 5 | Interactive architecture explorer and investigation dashboard | Planned |
 | 6 | Incremental indexing, secure workspaces, and CI/IDE integrations | Planned |

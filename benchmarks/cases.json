@@ -1,0 +1,57 @@
+{
+  "dataset_version": "1.1",
+  "description": "Four synthetic Python retrieval scenarios with implementation modules, import consumers, downstream workflows, and lexical decoys.",
+  "cases": [
+    {
+      "id": "password-registration-flow",
+      "query": "password history enforcement",
+      "relevant": [
+        "src/security/password_policy.py",
+        "src/api/account_routes.py",
+        "src/services/onboarding.py"
+      ],
+      "graph_only_relevant": [
+        "src/services/onboarding.py"
+      ]
+    },
+    {
+      "id": "tenant-scope-flow",
+      "query": "tenant isolation boundary",
+      "relevant": [
+        "src/security/scope.py",
+        "src/api/dispatch.py",
+        "src/services/tasks.py"
+      ],
+      "graph_only_relevant": [
+        "src/api/dispatch.py",
+        "src/services/tasks.py"
+      ]
+    },
+    {
+      "id": "credential-revocation-flow",
+      "query": "refresh credential revocation",
+      "relevant": [
+        "src/security/claims.py",
+        "src/api/handlers.py",
+        "src/services/session_jobs.py"
+      ],
+      "graph_only_relevant": [
+        "src/api/handlers.py",
+        "src/services/session_jobs.py"
+      ]
+    },
+    {
+      "id": "role-permission-flow",
+      "query": "role permission authorization",
+      "relevant": [
+        "src/security/rules.py",
+        "src/api/commands.py",
+        "src/services/admin_jobs.py"
+      ],
+      "graph_only_relevant": [
+        "src/api/commands.py",
+        "src/services/admin_jobs.py"
+      ]
+    }
+  ]
+}
