@@ -23,7 +23,10 @@ from repoatlas.architecture import build_architecture_report
 app = FastAPI(
     title="RepoAtlas AI",
     version="0.6.0",
-    description="Read-only repository intelligence with evidence retrieval and architecture analysis",
+    description=(
+        "Read-only repository intelligence with evidence retrieval "
+        "and architecture analysis"
+    ),
 )
 ALLOWED_ROOT = Path(os.environ.get("REPOATLAS_ROOT", ".")).resolve()
 
