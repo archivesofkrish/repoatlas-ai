@@ -106,7 +106,7 @@ def test_scanner_rejects_file_replaced_by_symlink_before_open(tmp_path: Path, mo
 
     def swap_then_open(path, flags, *args, **kwargs):
         nonlocal swapped
-        if Path(path) == source and not swapped:
+        if path == source.name and kwargs.get("dir_fd") is not None and not swapped:
             source.unlink()
             source.symlink_to(outside)
             swapped = True
