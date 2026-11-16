@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Coalesce overlapping credential-detection spans before redaction, preventing stale replacement offsets from leaving residual fragments; add regression tests for GitHub-token and AWS-key assignments.
+
+## Unreleased
+
 - Open scanned files through bounded file descriptors; on POSIX, traverse repository-relative directory components with dir-fd and O_NOFOLLOW checks to prevent final-file and parent-directory symlink swaps.
 - Add file and parent-directory replacement regression tests; use lstat/fstat identity checks on platforms without POSIX no-follow traversal.
 
