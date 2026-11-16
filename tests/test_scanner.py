@@ -1,5 +1,10 @@
 import hashlib
+import os
 from pathlib import Path
+
+import pytest
+
+from repoatlas import scanner
 
 from repoatlas.scanner import create_snapshot, scan_files
 
@@ -81,3 +86,76 @@ def test_scanner_excludes_common_cli_credential_stores(tmp_path: Path):
     assert excluded["ignored"] >= 4
     assert excluded["sensitive"] >= 2
     assert warnings == []
+
+
+def test_scanner_rejects_file_replaced_by_symlink_before_open(tmp_path: Path, monkeypatch):
+    source = tmp_path / "module.py"
+    outside = tmp_path / "outside.py"
+    source.write_text("safe = True\n", encoding="utf-8")
+    outside.write_text("secret = 'must not be read'\n", encoding="utf-8")
+
+    probe = tmp_path / "symlink-probe"
+    try:
+        probe.symlink_to(outside)
+        probe.unlink()
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlink creation is not available on this platform")
+
+    original_open = os.open
+    swapped = False
+
+    def swap_then_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if Path(path) == source and not swapped:
+            source.unlink()
+            source.symlink_to(outside)
+            swapped = True
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(scanner.os, "open", swap_then_open)
+    result = scanner._safe_text(source, 1024, root=tmp_path)
+
+    assert swapped is True
+    assert result is None
+
+
+def test_scanner_rejects_parent_directory_replaced_by_symlink(tmp_path: Path, monkeypatch):
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    source = nested / "module.py"
+    source.write_text("safe = True\n", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "module.py").write_text("secret = 'must not be read'\n", encoding="utf-8")
+
+    probe = tmp_path / "symlink-probe"
+    try:
+        probe.symlink_to(outside, target_is_directory=True)
+        probe.unlink()
+    except (OSError, NotImplementedError):
+        pytest.skip("Directory symlink creation is not available on this platform")
+
+    if not (
+        os.name == "posix"
+        and getattr(os, "O_NOFOLLOW", 0)
+        and getattr(os, "O_DIRECTORY", 0)
+        and os.open in getattr(os, "supports_dir_fd", set())
+    ):
+        pytest.skip("Descriptor-relative no-follow traversal is not supported")
+
+    original_open = os.open
+    swapped = False
+
+    def swap_directory_then_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if path == "nested" and kwargs.get("dir_fd") is not None and not swapped:
+            nested.rename(tmp_path / "nested-original")
+            nested.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(scanner.os, "open", swap_directory_then_open)
+    result = scanner._safe_text(source, 1024, root=tmp_path)
+
+    assert swapped is True
+    assert result is None

@@ -18,7 +18,7 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 
 | Capability | Implemented behaviour |
 |---|---|
-| Bounded repository scanner | Reads regular UTF-8 text files under file-count and byte limits; excludes generated folders, common cloud/CLI credential stores, sensitive filenames, symlinks, and binary content |
+| Bounded repository scanner | Reads regular UTF-8 text files under file-count and byte limits; excludes generated folders, common cloud/CLI credential stores, sensitive filenames, symlinked path components, and binary content |
 | Content-addressed snapshots | Captures each source file once; analysis and retrieval share the same in-memory contents, file hashes, and snapshot fingerprint |
 | Python analysis | Uses the standard-library AST to extract classes, functions, nested definitions, imports, calls, and docstrings without importing project modules |
 | Multi-language analysis | Optional Tree-sitter adapters for JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, and C# |

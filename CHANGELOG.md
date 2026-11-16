@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Open scanned files through bounded file descriptors; on POSIX, traverse repository-relative directory components with dir-fd and O_NOFOLLOW checks to prevent final-file and parent-directory symlink swaps.
+- Add file and parent-directory replacement regression tests; use lstat/fstat identity checks on platforms without POSIX no-follow traversal.
+
+
+## Unreleased
+
 - Exclude additional local credential stores, including GitHub CLI, Docker, Kubernetes, Azure CLI, Git, npm, and Python package-index credentials, before reading source files.
 - Add scanner regression coverage proving common credential-store contents are not indexed.
 
