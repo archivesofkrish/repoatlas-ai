@@ -27,8 +27,18 @@ DEFAULT_IGNORES = {
 SENSITIVE_NAMES = {
     ".env", ".env.local", ".env.production", "id_rsa", "id_ed25519",
     "credentials", "credentials.json", "secrets.yml", "secrets.yaml", "service-account.json",
+    ".git-credentials", ".netrc", ".npmrc", ".pypirc", ".dockercfg",
+    "credentials.db", "secrets.json", "client_secret.json",
 }
-SENSITIVE_DIRECTORIES = {".aws", ".ssh", ".gnupg", ".azure", ".config/gcloud"}
+# Exclude credential stores by location before opening candidate files.
+# Many CLI stores use ordinary YAML/JSON filenames, so filename heuristics alone
+# are insufficient.
+SENSITIVE_DIRECTORY_NAMES = {
+    ".aws", ".ssh", ".gnupg", ".azure", ".docker", ".kube",
+}
+SENSITIVE_DIRECTORY_PATHS = {
+    ".config/gcloud", ".config/gh", ".config/hub",
+}
 TEXT_EXTENSIONS = {
     ".py": "Python", ".pyi": "Python", ".js": "JavaScript", ".jsx": "JavaScript",
     ".mjs": "JavaScript", ".cjs": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript",
@@ -101,9 +111,12 @@ def _scan_files(
             candidate = current_path / name
             relative_directory = normalized_relative_path(base, candidate).lower()
             sensitive_directory = (
-                name.lower() in {".aws", ".ssh", ".gnupg"}
-                or relative_directory == ".config/gcloud"
-                or relative_directory.startswith(".config/gcloud/")
+                name.lower() in SENSITIVE_DIRECTORY_NAMES
+                or any(
+                    relative_directory == sensitive
+                    or relative_directory.startswith(sensitive + "/")
+                    for sensitive in SENSITIVE_DIRECTORY_PATHS
+                )
             )
             if name in ignores or sensitive_directory or candidate.is_symlink():
                 excluded["ignored" if not candidate.is_symlink() else "symlink"] += 1

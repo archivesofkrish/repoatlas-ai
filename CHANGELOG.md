@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Exclude additional local credential stores, including GitHub CLI, Docker, Kubernetes, Azure CLI, Git, npm, and Python package-index credentials, before reading source files.
+- Add scanner regression coverage proving common credential-store contents are not indexed.
+
+
 ## 0.9.0 - 2026-11-16
 
 - Add declarative architecture guardrails for allowed/forbidden package dependencies, cross-package import caps and dependency-cycle policy.

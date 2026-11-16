@@ -18,7 +18,7 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 
 | Capability | Implemented behaviour |
 |---|---|
-| Bounded repository scanner | Reads regular UTF-8 text files under file-count and byte limits; excludes generated folders, sensitive filenames, symlinks, and binary content |
+| Bounded repository scanner | Reads regular UTF-8 text files under file-count and byte limits; excludes generated folders, common cloud/CLI credential stores, sensitive filenames, symlinks, and binary content |
 | Content-addressed snapshots | Captures each source file once; analysis and retrieval share the same in-memory contents, file hashes, and snapshot fingerprint |
 | Python analysis | Uses the standard-library AST to extract classes, functions, nested definitions, imports, calls, and docstrings without importing project modules |
 | Multi-language analysis | Optional Tree-sitter adapters for JavaScript, TypeScript, Go, Rust, Java, C, C++, Ruby, and C# |
@@ -36,6 +36,10 @@ Understanding a large or unfamiliar repository is expensive. Search can find tex
 | Interfaces | CLI and optional FastAPI service with scan, lexical/hybrid search, ask, graph, and impact endpoints |
 
 The multi-language parser is an optional capability. Install and cache grammars explicitly; repository scans do not download parser code or execute project code.
+
+## Engineering audit
+
+The current source-level review, confirmed risks, mitigations and follow-up priorities are recorded in [the engineering audit](docs/ENGINEERING_AUDIT_2026-11-16.md). CI status is tracked separately by GitHub Actions; historical green runs are not validation of unmerged changes.
 
 ## Quick start
 
