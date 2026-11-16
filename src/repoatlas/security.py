@@ -34,11 +34,49 @@ def detect_secrets(text: str) -> list[SecretFinding]:
             SecretFinding(kind, match.start(), match.end())
             for match in pattern.finditer(text)
         )
-    return sorted(findings, key=lambda item: item.start)
+    return sorted(findings, key=lambda item: (item.start, item.end))
+
+
+def _coalesce_overlapping_findings(
+    findings: list[SecretFinding],
+) -> list[SecretFinding]:
+    """Merge overlapping spans before replacements can shift later offsets.
+
+    Multiple detectors commonly match the same credential (for example, both
+    generic_assignment and aws_access_key). Replacing those matches one by one
+    from right to left is unsafe because an earlier replacement can change
+    the offsets of another overlapping span. A single merged replacement
+    avoids leaving fragments of the original assignment or secret.
+    """
+    merged: list[SecretFinding] = []
+    kinds_by_group: list[set[str]] = []
+
+    for finding in sorted(findings, key=lambda item: (item.start, item.end)):
+        if merged and finding.start < merged[-1].end:
+            previous = merged[-1]
+            merged[-1] = SecretFinding(
+                kind=previous.kind,
+                start=previous.start,
+                end=max(previous.end, finding.end),
+            )
+            kinds_by_group[-1].add(finding.kind)
+        else:
+            merged.append(finding)
+            kinds_by_group.append({finding.kind})
+
+    return [
+        SecretFinding(
+            kind="+".join(sorted(kinds)),
+            start=finding.start,
+            end=finding.end,
+        )
+        for finding, kinds in zip(merged, kinds_by_group, strict=True)
+    ]
 
 
 def redact_secrets(text: str) -> str:
     """Redact detected credential-like spans without changing other text."""
-    for finding in reversed(detect_secrets(text)):
+    findings = _coalesce_overlapping_findings(detect_secrets(text))
+    for finding in reversed(findings):
         text = text[:finding.start] + f"[REDACTED:{finding.kind}]" + text[finding.end:]
     return text
