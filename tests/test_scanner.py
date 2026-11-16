@@ -101,18 +101,18 @@ def test_scanner_rejects_file_replaced_by_symlink_before_open(tmp_path: Path, mo
     except (OSError, NotImplementedError):
         pytest.skip("Symlink creation is not available on this platform")
 
-    original_open = os.open
+    original_open = scanner._open_descriptor
     swapped = False
 
-    def swap_then_open(path, flags, *args, **kwargs):
+    def swap_then_open(path, flags, *, dir_fd=None):
         nonlocal swapped
-        if path == source.name and kwargs.get("dir_fd") is not None and not swapped:
+        if path == source.name and dir_fd is not None and not swapped:
             source.unlink()
             source.symlink_to(outside)
             swapped = True
-        return original_open(path, flags, *args, **kwargs)
+        return original_open(path, flags, dir_fd=dir_fd)
 
-    monkeypatch.setattr(scanner.os, "open", swap_then_open)
+    monkeypatch.setattr(scanner, "_open_descriptor", swap_then_open)
     result = scanner._safe_text(source, 1024, root=tmp_path)
 
     assert swapped is True
@@ -143,18 +143,18 @@ def test_scanner_rejects_parent_directory_replaced_by_symlink(tmp_path: Path, mo
     ):
         pytest.skip("Descriptor-relative no-follow traversal is not supported")
 
-    original_open = os.open
+    original_open = scanner._open_descriptor
     swapped = False
 
-    def swap_directory_then_open(path, flags, *args, **kwargs):
+    def swap_directory_then_open(path, flags, *, dir_fd=None):
         nonlocal swapped
-        if path == "nested" and kwargs.get("dir_fd") is not None and not swapped:
+        if path == "nested" and dir_fd is not None and not swapped:
             nested.rename(tmp_path / "nested-original")
             nested.symlink_to(outside, target_is_directory=True)
             swapped = True
-        return original_open(path, flags, *args, **kwargs)
+        return original_open(path, flags, dir_fd=dir_fd)
 
-    monkeypatch.setattr(scanner.os, "open", swap_directory_then_open)
+    monkeypatch.setattr(scanner, "_open_descriptor", swap_directory_then_open)
     result = scanner._safe_text(source, 1024, root=tmp_path)
 
     assert swapped is True

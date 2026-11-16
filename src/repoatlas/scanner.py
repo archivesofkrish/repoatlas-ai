@@ -64,6 +64,13 @@ def _is_binary(sample: bytes) -> bool:
     return b"\x00" in sample
 
 
+def _open_descriptor(path: str | Path, flags: int, *, dir_fd: int | None = None) -> int:
+    """Small indirection for descriptor opening, also used by race-regression tests."""
+    if dir_fd is None:
+        return os.open(path, flags)
+    return os.open(path, flags, dir_fd=dir_fd)
+
+
 def _open_scanned_file(path: Path, root: Path | None) -> int:
     """Open a regular file without following symlink path components where supported.
 
@@ -86,11 +93,11 @@ def _open_scanned_file(path: Path, root: Path | None) -> int:
         if not relative.parts:
             raise OSError("A repository directory is not a source file")
 
-        root_fd = os.open(root, read_only | directory_flag | no_follow)
+        root_fd = _open_descriptor(root, read_only | directory_flag | no_follow)
         current_fd = root_fd
         try:
             for component in relative.parts[:-1]:
-                next_fd = os.open(
+                next_fd = _open_descriptor(
                     component,
                     read_only | directory_flag | no_follow,
                     dir_fd=current_fd,
@@ -98,7 +105,7 @@ def _open_scanned_file(path: Path, root: Path | None) -> int:
                 if current_fd != root_fd:
                     os.close(current_fd)
                 current_fd = next_fd
-            return os.open(
+            return _open_descriptor(
                 relative.parts[-1],
                 read_only | no_follow,
                 dir_fd=current_fd,
@@ -108,7 +115,7 @@ def _open_scanned_file(path: Path, root: Path | None) -> int:
                 os.close(current_fd)
             os.close(root_fd)
 
-    return os.open(path, read_only | no_follow)
+    return _open_descriptor(path, read_only | no_follow)
 
 
 def _same_open_file(path: Path, opened_stat: os.stat_result) -> bool:
