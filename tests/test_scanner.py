@@ -54,3 +54,30 @@ def test_snapshot_is_content_addressed_and_retains_captured_text(tmp_path: Path)
     source.write_text("def replacement_symbol():\n    return 2\n", encoding="utf-8")
     assert document.content == original
     assert create_snapshot(tmp_path).snapshot_id != snapshot.snapshot_id
+
+
+
+def test_scanner_excludes_common_cli_credential_stores(tmp_path: Path):
+    credential_files = {
+        ".config/gh/hosts.yml": "github.com:\n  oauth_token: ghp_do-not-index-this-token\n",
+        ".docker/config.json": '{"auths":{"registry.example":{"auth":"secret"}}}\n',
+        ".kube/config": "users:\n- user:\n    token: do-not-index-this-token\n",
+        ".azure/credentials": "[default]\nclient_secret=do-not-index-this-secret\n",
+        ".netrc": "machine example login user password do-not-index-this-secret\n",
+        ".npmrc": "//registry.example/:_authToken=do-not-index-this-token\n",
+    }
+    for relative, content in credential_files.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "safe.py").write_text("def safe():\n    return True\n", encoding="utf-8")
+
+    files, excluded, warnings = scan_files(tmp_path)
+    indexed_paths = {item.path for item in files}
+
+    assert indexed_paths == {"src/safe.py"}
+    assert excluded["ignored"] >= 4
+    assert excluded["sensitive"] >= 2
+    assert warnings == []
