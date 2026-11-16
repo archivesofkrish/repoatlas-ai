@@ -16,7 +16,7 @@ One actionable gap was confirmed and fixed in this branch: several common CLI cr
 | ID | Severity | Area | Finding | Status |
 |---|---|---|---|---|
 | RA-01 | Medium | Scanner / LLM data boundary | GitHub CLI, Docker, Kubernetes and Azure CLI credential locations were not all excluded by path. Ordinary YAML/JSON credential files could therefore be indexed and, during an explicit model-answer request, selected as evidence. | **Fixed in this branch** |
-| RA-02 | Medium | Filesystem safety | The scanner checks symlinks and file metadata before opening a path. A concurrently modified workspace can create a check/open race. The existing read-only design and non-following directory walk reduce exposure, but do not establish race-free file opening. | Follow-up hardening |
+| RA-02 | Medium | Filesystem safety | The scanner previously checked symlink and file metadata before a path-based open, leaving a check/open race for concurrently modified workspaces. | **Mitigated: POSIX descriptor-relative traversal pins directories and rejects symlink components; other platforms use identity checks** |
 | RA-03 | Medium | API resource isolation | Per-scan limits bound an individual analysis, but simultaneous API requests can each allocate a bounded snapshot and parser/graph workload. The local-only deployment guidance is appropriate; a shared concurrency and aggregate-work budget is a useful next safeguard. | Follow-up hardening |
 | RA-04 | Medium | Grounded answers | Evidence IDs, source hashes and line ranges validate provenance and freshness, not semantic entailment. A model can still overstate what a cited excerpt establishes. The limitation is explicitly documented and must remain visible in the UI/API. | Known limitation; retain |
 | RA-05 | Low | Architecture graph | Import and call edges are static approximations. Dynamic imports, reflection, dependency injection, conditional imports and runtime plugin loading can be unresolved or absent. The current conservative resolution policy is preferable to inventing edges. | Known limitation; improve language-specific coverage |
@@ -34,7 +34,7 @@ These are defence-in-depth exclusions, not a guarantee that all secrets can be d
 ## Positive controls observed
 
 - Repository reads are bounded by file count, per-file size and total bytes.
-- Symlinks are excluded; project code is not imported or executed by the scanner.
+- Symlinks are excluded; POSIX file reads now use descriptor-relative no-follow traversal for parent directories and final files, while other platforms perform post-open file identity checks.
 - Analysis and retrieval share captured source content and file hashes.
 - Ambiguous dependency edges remain unresolved rather than being guessed.
 - Provider-backed answers are explicit opt-in; the provider receives bounded selected excerpts, no tools and structured-output constraints.
@@ -54,7 +54,7 @@ Recommended next validation additions:
 
 ## Next development priorities
 
-1. Close or explicitly mitigate scanner check/open race windows using safe file-descriptor-based opening where supported.
+1. Add platform-specific scanner stress tests on Windows and macOS to verify the fallback identity checks under concurrent path replacement.
 2. Add shared API concurrency controls and aggregate resource budgets.
 3. Expand the benchmark corpus beyond the small synthetic retrieval set and publish per-query evidence judgments.
 4. Improve graph resolution for language-specific package manifests while preserving explicit unresolved states.

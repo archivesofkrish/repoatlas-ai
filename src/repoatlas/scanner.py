@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import stat
 from pathlib import Path
 
 from repoatlas.models import (
@@ -63,21 +64,108 @@ def _is_binary(sample: bytes) -> bool:
     return b"\x00" in sample
 
 
-def _safe_text(path: Path, max_file_bytes: int) -> tuple[bytes, str] | None:
+def _open_descriptor(path: str | Path, flags: int, *, dir_fd: int | None = None) -> int:
+    """Small indirection for descriptor opening, also used by race-regression tests."""
+    if dir_fd is None:
+        return os.open(path, flags)
+    return os.open(path, flags, dir_fd=dir_fd)
+
+
+def _open_scanned_file(path: Path, root: Path | None) -> int:
+    """Open a regular file without following symlink path components where supported.
+
+    POSIX dir-fd traversal pins each parent directory and applies O_NOFOLLOW to
+    every component. Other platforms use a final-component no-follow flag when
+    available, followed by lstat/fstat identity checks in _safe_text.
+    """
+    read_only = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+
+    if (
+        root is not None
+        and os.name == "posix"
+        and no_follow
+        and directory_flag
+        and os.open in getattr(os, "supports_dir_fd", set())
+    ):
+        relative = path.relative_to(root)
+        if not relative.parts:
+            raise OSError("A repository directory is not a source file")
+
+        root_fd = _open_descriptor(root, read_only | directory_flag | no_follow)
+        current_fd = root_fd
+        try:
+            for component in relative.parts[:-1]:
+                next_fd = _open_descriptor(
+                    component,
+                    read_only | directory_flag | no_follow,
+                    dir_fd=current_fd,
+                )
+                if current_fd != root_fd:
+                    os.close(current_fd)
+                current_fd = next_fd
+            return _open_descriptor(
+                relative.parts[-1],
+                read_only | no_follow,
+                dir_fd=current_fd,
+            )
+        finally:
+            if current_fd != root_fd:
+                os.close(current_fd)
+            os.close(root_fd)
+
+    return _open_descriptor(path, read_only | no_follow)
+
+
+def _same_open_file(path: Path, opened_stat: os.stat_result) -> bool:
+    """Best-effort path identity check for platforms without O_NOFOLLOW."""
     try:
-        if path.is_symlink() or not path.is_file():
+        current = path.lstat()
+    except OSError:
+        return False
+    if stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode):
+        return False
+    return (
+        current.st_dev == opened_stat.st_dev
+        and current.st_ino == opened_stat.st_ino
+    )
+
+
+def _safe_text(
+    path: Path, max_file_bytes: int, *, root: Path | None = None
+) -> tuple[bytes, str] | None:
+    descriptor: int | None = None
+    try:
+        descriptor = _open_scanned_file(path, root)
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
             return None
-        size = path.stat().st_size
-        if size > max_file_bytes:
+        if opened_stat.st_size > max_file_bytes:
             return None
-        with path.open("rb") as stream:
+
+        if not getattr(os, "O_NOFOLLOW", 0) and not _same_open_file(path, opened_stat):
+            return None
+
+        stream = os.fdopen(descriptor, "rb", closefd=True)
+        descriptor = None
+        with stream:
             data = stream.read(max_file_bytes + 1)
+
+        if not getattr(os, "O_NOFOLLOW", 0) and not _same_open_file(path, opened_stat):
+            return None
         if len(data) > max_file_bytes or _is_binary(data[:8192]):
             return None
         text = data.decode("utf-8")
         return data, text
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def _scan_files(
@@ -158,7 +246,7 @@ def _scan_files(
                     f"(at {rel})."
                 )
                 return files, documents, excluded, warnings
-            result = _safe_text(path, max_file_bytes)
+            result = _safe_text(path, max_file_bytes, root=base)
             if result is None:
                 excluded["binary_or_unreadable"] += 1
                 continue

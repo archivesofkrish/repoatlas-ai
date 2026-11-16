@@ -93,9 +93,9 @@ def test_hybrid_search_reads_each_source_file_only_once(tmp_path: Path, monkeypa
     original = scanner._safe_text
     read_paths = []
 
-    def counted_read(path, max_file_bytes):
+    def counted_read(path, max_file_bytes, **kwargs):
         read_paths.append(path)
-        return original(path, max_file_bytes)
+        return original(path, max_file_bytes, **kwargs)
 
     monkeypatch.setattr(scanner, "_safe_text", counted_read)
     hits = hybrid_search_repository(tmp_path, "session token expiry enforcement")
