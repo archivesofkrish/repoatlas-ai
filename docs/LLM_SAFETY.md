@@ -35,4 +35,4 @@ A valid file hash proves that the cited file matches the captured source bytes. 
 
 RepoAtlas therefore reports provenance validation, not formal semantic verification. Model claims can still be incomplete, misleading, or wrong. Human review remains necessary before using an answer for security, production, compliance, or other consequential decisions.
 
-Secret redaction is heuristic and can miss credentials. Never assume it removes all sensitive data. Review the snippets that RepoAtlas retrieves, and do not use provider-backed answering on code that your organisation has not approved for external processing.
+Overlapping secret-pattern matches are coalesced before replacement so changing one span cannot shift the offsets of another overlapping span and leave residual fragments. Secret redaction is still heuristic and can miss credentials. Never assume it removes all sensitive data. Review the snippets that RepoAtlas retrieves, and do not use provider-backed answering on code that your organisation has not approved for external processing.
