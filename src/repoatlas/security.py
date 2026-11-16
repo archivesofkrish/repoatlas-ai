@@ -13,7 +13,7 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "generic_assignment",
         re.compile(
             r"""(?i)(api[_-]?key|secret|password|token)\s*[:=]\s*['"]?"""
-            r"([A-Za-z0-9_./+=-]{12,})"
+            r"""([A-Za-z0-9_./+=-]{12,})['"]?"""
         ),
     ),
 )
