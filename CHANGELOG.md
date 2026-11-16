@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Refresh the engineering audit with the merged descriptor-safe scanner, overlap-safe secret redaction, current CI evidence and outstanding API resource-isolation risks.
+
+## Unreleased
+
 - Coalesce overlapping credential-detection spans before redaction, preventing stale replacement offsets from leaving residual fragments; add regression tests for GitHub-token and AWS-key assignments.
 
 ## Unreleased
