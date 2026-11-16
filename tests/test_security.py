@@ -33,7 +33,7 @@ def test_overlapping_assignment_and_aws_key_matches_leave_no_offset_fragment():
         "before [REDACTED:aws_access_key+generic_assignment] after"
     )
     assert secret not in redacted
-    assert "_key" not in redacted
+    assert 'api_key="' not in redacted
 
 
 def test_multiple_overlapping_findings_preserve_surrounding_text():
